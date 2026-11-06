@@ -35,6 +35,8 @@ let appState = {
   users: [],
   currentUser: null, // User đang đăng nhập {id, username, fullName, position, role}
   currentAdminTab: 'reports', // 'reports' | 'daily_tracker' | 'user_manager'
+  trackerMode: 'week', // 'week' (kế hoạch dự kiến tuần) | 'day' (tiến độ thực tế ngày)
+  trackerSelectedWeek: '45', // Mặc định giám sát Tuần 45
   empFilterWeek: 'all',
   selectedTrackerDate: '', // Ngày đang chọn để thống kê xem ai chưa báo cáo
   accessedViaDirectLink: false, // Cờ nhận biết đang truy cập bằng đường link báo cáo riêng
@@ -157,6 +159,13 @@ function checkAuthSession() {
   try {
     // 1. Kiểm tra tham số trên URL (?user=... hoặc ?nv=... hoặc ?nhanvien=... hoặc ?u=...)
     const urlParams = new URLSearchParams(window.location.search);
+    const cloudParam = urlParams.get('cloud');
+    if (cloudParam) {
+      try {
+        localStorage.setItem(CLOUD_DB_KEY, decodeURIComponent(cloudParam));
+      } catch (e) {}
+    }
+
     const userParam = urlParams.get('user') || urlParams.get('nv') || urlParams.get('nhanvien') || urlParams.get('u');
 
     if (userParam) {
@@ -380,6 +389,10 @@ function getEmployeeDirectLink(username, action = '') {
   let url = `${baseUrl}?user=${encodeURIComponent(username)}`;
   if (action) {
     url += `&action=${encodeURIComponent(action)}`;
+  }
+  const cloudUrl = getCloudDbUrl();
+  if (cloudUrl) {
+    url += `&cloud=${encodeURIComponent(cloudUrl)}`;
   }
   return url;
 }
@@ -640,9 +653,219 @@ function syncTableRangeScroll(containerId, rangeId) {
 
 /**
  * ========================================================
- * 2. KHỞI TẠO DỮ LIỆU BÁO CÁO & ỨNG DỤNG
+ * 2. KHỞI TẠO DỮ LIỆU BÁO CÁO & ĐỒNG BỘ MÁY CHỦ / CLOUD (API SYNC)
  * ========================================================
  */
+
+const CLOUD_DB_KEY = 'DAILY_WORK_CLOUD_FIREBASE_URL';
+
+function getCloudDbUrl() {
+  const custom = localStorage.getItem(CLOUD_DB_KEY);
+  if (custom && custom.trim()) return custom.trim().replace(/\/$/, '');
+  if (window.APP_CLOUD_DB_URL) return window.APP_CLOUD_DB_URL.replace(/\/$/, '');
+  return '';
+}
+
+function openCloudSyncModal() {
+  const input = document.getElementById('cloud-db-url-input');
+  const url = getCloudDbUrl();
+  if (input) input.value = url;
+  updateCloudSyncStatusDisplay();
+  const modal = document.getElementById('cloud-sync-modal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeCloudSyncModal() {
+  const modal = document.getElementById('cloud-sync-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function updateCloudSyncStatusDisplay() {
+  const url = getCloudDbUrl();
+  const textEl = document.getElementById('cloud-sync-status-text');
+  const boxEl = document.getElementById('cloud-sync-status-box');
+  if (!textEl || !boxEl) return;
+
+  if (url) {
+    textEl.textContent = `🟢 Đang kết nối Đám mây: ${url}`;
+    boxEl.className = 'p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center justify-between text-emerald-900';
+  } else {
+    textEl.textContent = '🟡 Đang sử dụng Máy chủ nội bộ / Vercel API';
+    boxEl.className = 'p-3.5 bg-amber-50 border border-amber-300 rounded-xl flex items-center justify-between text-amber-900';
+  }
+}
+
+async function testCloudConnection() {
+  const input = document.getElementById('cloud-db-url-input');
+  const url = (input ? input.value.trim() : getCloudDbUrl()).replace(/\/$/, '');
+  if (!url) {
+    alert("Vui lòng nhập đường dẫn Firebase Realtime Database trước khi kiểm tra!");
+    return;
+  }
+  try {
+    const testUrl = `${url}/reports.json?t=${Date.now()}`;
+    const resp = await fetch(testUrl, { cache: 'no-store' });
+    if (resp.ok) {
+      alert(`🎉 KẾT NỐI ĐÁM MÂY THÀNH CÔNG!\n\nĐịa chỉ: ${url}\n\nNhân viên dùng 4G, 5G, Wi-Fi ở bất kỳ đâu khi bấm Lưu báo cáo sẽ lập tức cập nhật về Admin!`);
+    } else {
+      alert(`⚠️ Không thể kết nối (Mã lỗi HTTP ${resp.status}). Vui lòng kiểm tra lại đường dẫn và đảm bảo đã bật "Start in test mode" (Chế độ thử nghiệm) trên Firebase.`);
+    }
+  } catch (err) {
+    alert(`⚠️ Lỗi kết nối: ${err.message}\nVui lòng kiểm tra lại đường dẫn Firebase.`);
+  }
+}
+
+function saveCloudDbUrl() {
+  const input = document.getElementById('cloud-db-url-input');
+  const url = input ? input.value.trim().replace(/\/$/, '') : '';
+  if (url) {
+    localStorage.setItem(CLOUD_DB_KEY, url);
+    showToast("✅ Đã kích hoạt đồng bộ Đám mây thành công! Mọi thiết bị 4G giờ có thể gửi báo cáo trực tiếp.", "success");
+    // Đồng bộ ngay dữ liệu hiện có lên cloud
+    syncToServer({ action: 'overwrite', reports: appState.reports });
+  } else {
+    localStorage.removeItem(CLOUD_DB_KEY);
+    showToast("Đã chuyển về sử dụng máy chủ nội bộ mặc định.", "info");
+  }
+  updateCloudSyncStatusDisplay();
+  closeCloudSyncModal();
+}
+
+function clearCloudDbUrl() {
+  if (confirm("Bạn có chắc chắn muốn hủy kết nối đám mây riêng và quay về máy chủ mặc định?")) {
+    localStorage.removeItem(CLOUD_DB_KEY);
+    const input = document.getElementById('cloud-db-url-input');
+    if (input) input.value = '';
+    updateCloudSyncStatusDisplay();
+    showToast("Đã xóa cấu hình đám mây.", "info");
+  }
+}
+
+function getApiBaseUrl() {
+  if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
+    return window.location.origin;
+  }
+  const custom = localStorage.getItem(CUSTOM_BASE_URL_KEY);
+  if (custom && (custom.startsWith('http://') || custom.startsWith('https://'))) {
+    return custom.replace(/\/index\.html.*$/, '').replace(/\/$/, '');
+  }
+  return 'http://192.168.0.173:8888';
+}
+
+let isSyncing = false;
+
+/**
+ * Đồng bộ dữ liệu báo cáo từ máy chủ về máy khách
+ * Tự động cập nhật bảng quản lý cho Admin khi nhân viên vừa báo cáo xong!
+ */
+async function syncFromServer(options = {}) {
+  const showToastMsg = options.showToast || false;
+  if (isSyncing) return;
+  isSyncing = true;
+
+  try {
+    const cloudUrl = getCloudDbUrl();
+    let serverReports = null;
+
+    // 1. Thử lấy từ Cloud Database (Firebase) trước nếu có (cho phép 4G và mọi nơi)
+    if (cloudUrl) {
+      try {
+        const fbUrl = `${cloudUrl}/reports.json?t=${Date.now()}`;
+        const fbResp = await fetch(fbUrl, { cache: 'no-store' });
+        if (fbResp.ok) {
+          const fbData = await fbResp.json();
+          if (Array.isArray(fbData)) {
+            serverReports = fbData;
+          } else if (fbData && typeof fbData === 'object') {
+            serverReports = Object.values(fbData);
+          }
+        }
+      } catch (e) {
+        console.warn("Lỗi đọc từ Cloud Firebase:", e);
+      }
+    }
+
+    // 2. Nếu chưa có từ cloud, lấy từ máy chủ nội bộ / Vercel API
+    if (!serverReports) {
+      const apiUrl = `${getApiBaseUrl()}/api/reports?t=${Date.now()}`;
+      const resp = await fetch(apiUrl, { cache: 'no-store' });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (Array.isArray(data)) {
+          serverReports = data;
+        } else if (data && data.reports && Array.isArray(data.reports)) {
+          serverReports = data.reports;
+        }
+      }
+    }
+
+    if (Array.isArray(serverReports) && serverReports.length > 0) {
+      const currentLen = appState.reports.length;
+      const serverLen = serverReports.length;
+      const currentJson = JSON.stringify(appState.reports);
+      const serverJson = JSON.stringify(serverReports);
+
+      if (currentJson !== serverJson) {
+        appState.reports = serverReports;
+        try {
+          localStorage.setItem(STORAGE_KEY, serverJson);
+        } catch (e) {}
+
+        populateDropdowns();
+        renderApp();
+
+        if (showToastMsg) {
+          showToast(`✅ Đã đồng bộ thành công ${serverReports.length} báo cáo từ máy chủ!`, "success");
+        } else if (appState.currentUser?.role === 'admin' && serverLen > currentLen) {
+          showToast(`🔔 Có ${serverLen - currentLen} báo cáo mới vừa được nhân viên gửi lên!`, "info");
+        }
+      } else if (showToastMsg) {
+        showToast(`✅ Dữ liệu đã là mới nhất (${serverReports.length} báo cáo)!`, "info");
+      }
+    }
+  } catch (err) {
+    if (showToastMsg) {
+      showToast("Không thể kết nối đến máy chủ để đồng bộ!", "error");
+    }
+  } finally {
+    isSyncing = false;
+  }
+}
+
+/**
+ * Gửi dữ liệu báo cáo lên máy chủ & Cloud Database (để Admin và các thiết bị 4G nhận được tức thì)
+ */
+async function syncToServer(payload) {
+  const cloudUrl = getCloudDbUrl();
+
+  // 1. Đồng bộ lên Cloud Database (Firebase) nếu được cấu hình -> Hoạt động cho 4G & mọi nơi
+  if (cloudUrl) {
+    try {
+      const fbUrl = `${cloudUrl}/reports.json`;
+      await fetch(fbUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(appState.reports)
+      });
+      console.log("Đã đồng bộ lên Cloud Firebase thành công!");
+    } catch (e) {
+      console.warn("Lỗi đồng bộ Cloud Firebase:", e);
+    }
+  }
+
+  // 2. Gửi lên Máy chủ nội bộ hoặc Vercel API
+  try {
+    const apiUrl = `${getApiBaseUrl()}/api/reports`;
+    await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  } catch (err) {
+    console.warn("Chưa gửi được lên máy chủ:", err);
+  }
+}
+
 function initApp() {
   initUsers();
   loadData();
@@ -651,6 +874,14 @@ function initApp() {
   populateDropdowns();
   renderApp();
   setupEventListeners();
+
+  // 1. Tự động đồng bộ ngay khi vừa mở ứng dụng
+  syncFromServer();
+
+  // 2. Tự động kiểm tra & cập nhật báo cáo mới từ nhân viên mỗi 6 giây cho Admin
+  setInterval(() => {
+    syncFromServer();
+  }, 6000);
 
   // Xử lý tự động mở hành động khi vào bằng link đặc biệt (?action=plan hoặc ?action=report)
   if (appState.pendingAction) {
@@ -691,13 +922,20 @@ function loadData() {
   }
 }
 
-function saveData() {
+function saveData(customPayload = null) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(appState.reports));
   } catch (e) {
     console.error("Lỗi lưu dữ liệu:", e);
     alert("Không thể lưu vào bộ nhớ trình duyệt (dung lượng đầy). Vui lòng xuất dữ liệu ra file Excel!");
   }
+
+  // Tự động đẩy báo cáo lên máy chủ để Quản lý (Admin) nhận được ngay tức thì!
+  const payload = customPayload || {
+    action: "upsert",
+    reports: appState.reports
+  };
+  syncToServer(payload);
 }
 
 /**
@@ -711,8 +949,41 @@ function initTrackerDate() {
   appState.selectedTrackerDate = `${dd}/${mm}/${yyyy}`;
 }
 
+/**
+ * Định dạng nhãn hiển thị cho tuần làm việc:
+ * Tuần 45 bắt đầu từ Thứ Hai 09/11/2026
+ */
+function formatWeekLabel(w) {
+  if (!w || w === 'all') return 'Tất cả các tuần';
+  const num = parseInt(w, 10);
+  if (!isNaN(num) && num >= 1 && num <= 53) {
+    const { monday } = getDateRangeOfWeek(num);
+    const fmt = (d) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+    return `Tuần ${num} (Bắt đầu từ ${fmt(monday)}/${monday.getFullYear()})`;
+  }
+  return `Tuần ${w}`;
+}
+
+function formatWeekRangeFull(w) {
+  if (!w || w === 'all') return 'Tất cả các tuần';
+  const num = parseInt(w, 10);
+  if (!isNaN(num) && num >= 1 && num <= 53) {
+    const { monday, sunday } = getDateRangeOfWeek(num);
+    const fmt = (d) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+    return `Tuần ${num} (${fmt(monday)} ➔ ${fmt(sunday)}/${monday.getFullYear()})`;
+  }
+  return `Tuần ${w}`;
+}
+
 function getUniqueWeeks() {
   const weeks = new Set();
+  weeks.add("45"); // Luôn ưu tiên Tuần 45 bắt đầu từ 09/11/2026
+  weeks.add("44");
+  const todayWeek = getWeekNumber(new Date());
+  if (todayWeek) {
+    weeks.add(String(todayWeek));
+    weeks.add(String(todayWeek + 1));
+  }
   appState.reports.forEach(r => {
     if (r.week !== undefined && r.week !== null && r.week.toString().trim()) {
       weeks.add(r.week.toString().trim());
@@ -735,22 +1006,35 @@ function populateDropdowns() {
   // Filter nhân viên cho Quản lý
   const filterEmp = document.getElementById('filter-employee');
   if (filterEmp) {
-    filterEmp.innerHTML = '<option value="all">Tất cả nhân viên</option>' + 
-      employeeUsers.map(u => `<option value="${escapeHtml(u.fullName)}">${escapeHtml(u.fullName)}</option>`).join('');
+    const adminUser = appState.users.find(u => u.role === 'admin');
+    let empOpts = '<option value="all">Tất cả nhân sự (Bao gồm Quản lý)</option>';
+    if (adminUser) {
+      empOpts += `<option value="${escapeHtml(adminUser.fullName)}">👑 ${escapeHtml(adminUser.fullName)} (${escapeHtml(adminUser.position || 'Quản lý')})</option>`;
+    }
+    empOpts += employeeUsers.map(u => `<option value="${escapeHtml(u.fullName)}">${escapeHtml(u.fullName)}</option>`).join('');
+    filterEmp.innerHTML = empOpts;
   }
 
   // Filter tuần cho Quản lý
   const filterWeek = document.getElementById('filter-week');
   if (filterWeek) {
     filterWeek.innerHTML = '<option value="all">Tất cả các tuần</option>' + 
-      weeks.map(w => `<option value="${escapeHtml(w)}">Tuần ${escapeHtml(w)}</option>`).join('');
+      weeks.map(w => `<option value="${escapeHtml(w)}" ${w === appState.filters.week ? 'selected' : ''}>${formatWeekLabel(w)}</option>`).join('');
   }
 
   // Filter tuần cho Nhân viên
   const empFilterWeek = document.getElementById('emp-filter-week');
   if (empFilterWeek) {
     empFilterWeek.innerHTML = '<option value="all">Tất cả các tuần</option>' + 
-      weeks.map(w => `<option value="${escapeHtml(w)}" ${w === appState.empFilterWeek ? 'selected' : ''}>Tuần ${escapeHtml(w)}</option>`).join('');
+      weeks.map(w => `<option value="${escapeHtml(w)}" ${w === appState.empFilterWeek ? 'selected' : ''}>${formatWeekLabel(w)}</option>`).join('');
+  }
+
+  // Filter tuần cho Tracker (Giám sát kế hoạch dự kiến)
+  const trackerWeekSelect = document.getElementById('tracker-week-select');
+  if (trackerWeekSelect) {
+    trackerWeekSelect.innerHTML = weeks.map(w => 
+      `<option value="${escapeHtml(w)}" ${w === (appState.trackerSelectedWeek || '45') ? 'selected' : ''}>${formatWeekLabel(w)}</option>`
+    ).join('');
   }
 
   // Filter loại công việc
@@ -856,6 +1140,21 @@ function switchAdminTab(tabName) {
   renderAdminTabs();
 }
 
+/**
+ * Mở Cổng Báo Cáo cho Quản lý (Admin) hoặc nhân viên chỉ định
+ */
+function openAdminReportPortal(targetEmp = null) {
+  const user = appState.currentUser;
+  if (!user) return;
+
+  if (user.role === 'admin') {
+    appState.currentEmployee = targetEmp || user.fullName;
+    switchAdminTab('employee_view');
+  } else {
+    renderEmployeeView();
+  }
+}
+
 function renderAdminTabs() {
   const tab = appState.currentAdminTab;
 
@@ -875,17 +1174,24 @@ function renderAdminTabs() {
   const activeCls = 'px-3.5 py-1.5 text-xs font-bold rounded-lg bg-blue-700 text-white shadow-sm flex items-center gap-1.5';
   const inactiveCls = 'px-3.5 py-1.5 text-xs font-medium rounded-lg text-slate-600 hover:bg-slate-100 flex items-center gap-1.5 transition';
 
+  const empActiveCls = 'px-3.5 py-1.5 text-xs font-bold rounded-lg bg-emerald-700 text-white shadow-sm flex items-center gap-1.5';
+  const empInactiveCls = 'px-3.5 py-1.5 text-xs font-bold rounded-lg text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 flex items-center gap-1.5 transition shadow-sm';
+
   btnReports.className = tab === 'reports' ? activeCls : inactiveCls;
   btnTracker.className = tab === 'daily_tracker' ? activeCls : inactiveCls;
   btnUsers.className = tab === 'user_manager' ? activeCls : inactiveCls;
-  btnEmployee.className = tab === 'employee_view' ? activeCls : inactiveCls;
+  btnEmployee.className = tab === 'employee_view' ? empActiveCls : empInactiveCls;
 
   if (tab === 'reports') {
     document.getElementById('manager-view').style.display = 'block';
     renderManagerView();
   } else if (tab === 'daily_tracker') {
     document.getElementById('admin-tracker-view').style.display = 'block';
-    renderDailyTrackerView();
+    if (appState.trackerMode === 'day') {
+      renderDailyTrackerView();
+    } else {
+      renderWeeklyPlanTrackerView(appState.trackerSelectedWeek || '45');
+    }
   } else if (tab === 'user_manager') {
     document.getElementById('admin-users-view').style.display = 'block';
     renderUsersView();
@@ -897,8 +1203,476 @@ function renderAdminTabs() {
 
 /**
  * ========================================================
- * 4. PHÂN HỆ QUẢN LÝ: THỐNG KÊ NGÀY & AI CHƯA BÁO CÁO (MỚI)
+ * 4. PHÂN HỆ QUẢN LÝ: GIÁM SÁT KẾ HOẠCH TUẦN & TIẾN ĐỘ THỰC TẾ
  * ========================================================
+ */
+
+function switchTrackerMode(mode) {
+  appState.trackerMode = mode;
+  const btnWeek = document.getElementById('btn-tracker-mode-week');
+  const btnDay = document.getElementById('btn-tracker-mode-day');
+  const weekContainer = document.getElementById('tracker-week-container');
+  const dayContainer = document.getElementById('tracker-day-container');
+  const summaryText = document.getElementById('tracker-mode-summary-text');
+
+  if (mode === 'week') {
+    if (btnWeek) btnWeek.className = 'px-3.5 py-1.5 text-xs font-bold rounded-md bg-blue-700 text-white shadow-sm flex items-center gap-1.5 transition';
+    if (btnDay) btnDay.className = 'px-3.5 py-1.5 text-xs font-semibold rounded-md text-slate-600 hover:bg-white flex items-center gap-1.5 transition';
+    if (weekContainer) weekContainer.style.display = 'block';
+    if (dayContainer) dayContainer.style.display = 'none';
+    if (summaryText) summaryText.textContent = 'Đang kiểm tra: Kế hoạch công việc dự kiến theo tuần';
+    renderWeeklyPlanTrackerView(appState.trackerSelectedWeek || '45');
+  } else {
+    if (btnWeek) btnWeek.className = 'px-3.5 py-1.5 text-xs font-semibold rounded-md text-slate-600 hover:bg-white flex items-center gap-1.5 transition';
+    if (btnDay) btnDay.className = 'px-3.5 py-1.5 text-xs font-bold rounded-md bg-blue-700 text-white shadow-sm flex items-center gap-1.5 transition';
+    if (weekContainer) weekContainer.style.display = 'none';
+    if (dayContainer) dayContainer.style.display = 'block';
+    if (summaryText) summaryText.textContent = 'Đang kiểm tra: Tiến độ báo cáo thực tế trong ngày';
+    renderDailyTrackerView();
+  }
+}
+
+function handleTrackerWeekChange(weekVal) {
+  appState.trackerSelectedWeek = weekVal;
+  renderWeeklyPlanTrackerView(weekVal);
+}
+
+function setTrackerWeekToDefault() {
+  appState.trackerSelectedWeek = '45';
+  const sel = document.getElementById('tracker-week-select');
+  if (sel) sel.value = '45';
+  renderWeeklyPlanTrackerView('45');
+}
+
+/**
+ * 4.1. Thống kê Kế Hoạch Dự Kiến Theo Tuần (Tổng hợp ai ĐÃ nộp, ai CHƯA nộp kế hoạch Tuần 45)
+ */
+function renderWeeklyPlanTrackerView(weekVal) {
+  const targetWeek = String(weekVal || appState.trackerSelectedWeek || '45');
+  appState.trackerSelectedWeek = targetWeek;
+
+  const weekSelect = document.getElementById('tracker-week-select');
+  if (weekSelect && weekSelect.value !== targetWeek) {
+    weekSelect.value = targetWeek;
+  }
+
+  const activeEmployees = appState.users.filter(u => u.role === 'employee' && u.status === 'active');
+  const totalEmployeesCount = activeEmployees.length;
+
+  // Lọc các báo cáo kế hoạch của tuần này (có tuần trùng khớp và có ít nhất 1 thông tin kế hoạch)
+  const weekReports = appState.reports.filter(r => {
+    return String(r.week) === targetWeek && (
+      (r.planDetail && r.planDetail.trim()) ||
+      (r.planQuantity && r.planQuantity.trim()) ||
+      (r.planLocations && r.planLocations.trim()) ||
+      r.jobType
+    );
+  });
+
+  // Gom nhóm theo nhân viên
+  const reportedMap = new Map();
+  weekReports.forEach(r => {
+    if (r.employeeName) {
+      if (!reportedMap.has(r.employeeName)) {
+        reportedMap.set(r.employeeName, []);
+      }
+      reportedMap.get(r.employeeName).push(r);
+    }
+  });
+
+  const reportedList = [];
+  const unreportedList = [];
+
+  activeEmployees.forEach(u => {
+    if (reportedMap.has(u.fullName)) {
+      reportedList.push({
+        user: u,
+        reports: reportedMap.get(u.fullName)
+      });
+    } else {
+      unreportedList.push(u);
+    }
+  });
+
+  // Cập nhật số liệu KPI tuần
+  const totalEl = document.getElementById('tracker-week-total-emps');
+  const repEl = document.getElementById('tracker-week-reported-count');
+  const unrepEl = document.getElementById('tracker-week-unreported-count');
+  const rateEl = document.getElementById('tracker-week-rate-percent');
+
+  if (totalEl) totalEl.textContent = totalEmployeesCount;
+  if (repEl) repEl.textContent = reportedList.length;
+  if (unrepEl) unrepEl.textContent = unreportedList.length;
+
+  const rate = totalEmployeesCount > 0 ? Math.round((reportedList.length / totalEmployeesCount) * 100) : 0;
+  if (rateEl) rateEl.textContent = `${rate}%`;
+
+  // Render Danh sách CHƯA NỘP KẾ HOẠCH TUẦN (Cảnh báo đỏ)
+  const unrepBody = document.getElementById('tracker-week-unreported-body');
+  const unrepBadge = document.getElementById('tracker-week-unreported-badge');
+  if (unrepBadge) unrepBadge.textContent = `${unreportedList.length} nhân sự`;
+
+  const weekLabel = formatWeekLabel(targetWeek);
+
+  if (unrepBody) {
+    if (unreportedList.length === 0) {
+      unrepBody.innerHTML = `
+        <tr>
+          <td colspan="6" class="py-10 text-center text-emerald-600 bg-emerald-50/50">
+            <i class="fa-solid fa-circle-check text-3xl mb-2 block text-emerald-500"></i>
+            <strong>Tuyệt vời!</strong> Toàn bộ ${totalEmployeesCount} nhân sự đã nộp đầy đủ kế hoạch dự kiến cho <strong>${escapeHtml(weekLabel)}</strong>.
+          </td>
+        </tr>
+      `;
+    } else {
+      unrepBody.innerHTML = unreportedList.map((u, idx) => `
+        <tr class="hover:bg-rose-50/40 transition">
+          <td class="cell-center text-xs font-semibold text-slate-400">${idx + 1}</td>
+          <td class="font-bold text-slate-900 whitespace-nowrap">
+            <div class="flex items-center gap-2">
+              <span class="w-6 h-6 rounded-full bg-rose-100 text-rose-700 font-bold text-xs flex items-center justify-center">
+                ${u.fullName.charAt(0)}
+              </span>
+              <span>${escapeHtml(u.fullName)}</span>
+            </div>
+          </td>
+          <td class="text-xs text-slate-600">${escapeHtml(u.position)}</td>
+          <td class="text-xs font-mono text-slate-500">@${escapeHtml(u.username)}</td>
+          <td class="cell-center whitespace-nowrap">
+            <span class="badge-unreported px-2.5 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1">
+              <i class="fa-solid fa-triangle-exclamation"></i> Chưa nộp KH Tuần
+            </span>
+          </td>
+          <td class="cell-center whitespace-nowrap">
+            <button onclick="copyReminderForWeeklyPlan('${u.username}', '${escapeHtml(u.fullName)}', '${targetWeek}')" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 flex items-center justify-center gap-1.5 shadow-sm transition w-full" title="Copy tin nhắn nhắc nộp kế hoạch Tuần ${targetWeek} kèm link riêng gửi cho ${escapeHtml(u.fullName)}">
+              <i class="fa-solid fa-paper-plane text-rose-600"></i>
+              <span>Nhắc Nộp KH</span>
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    }
+  }
+
+  // Render Danh sách ĐÃ NỘP KẾ HOẠCH TUẦN
+  const repBody = document.getElementById('tracker-week-reported-body');
+  const repBadge = document.getElementById('tracker-week-reported-badge');
+  if (repBadge) repBadge.textContent = `${reportedList.length} nhân sự`;
+
+  if (repBody) {
+    if (reportedList.length === 0) {
+      repBody.innerHTML = `
+        <tr>
+          <td colspan="6" class="py-8 text-center text-slate-400">
+            Chưa có nhân viên nào gửi kế hoạch dự kiến cho <strong>${escapeHtml(weekLabel)}</strong>.
+          </td>
+        </tr>
+      `;
+    } else {
+      repBody.innerHTML = reportedList.map((item, idx) => {
+        const u = item.user;
+        const reps = item.reports;
+        let totalPlanQty = 0;
+        reps.forEach(r => {
+          const q = parseInt(r.planQuantity, 10);
+          if (!isNaN(q)) totalPlanQty += q;
+        });
+
+        const planSummaries = reps.map(r => {
+          const detail = r.planDetail ? `: ${escapeHtml(r.planDetail)}` : '';
+          return `<span class="inline-block bg-slate-100 border border-slate-200 text-slate-800 text-[11px] px-2 py-0.5 rounded mr-1 mb-1"><strong>${escapeHtml(r.jobType)}</strong> (${r.date || '-'})${detail}</span>`;
+        }).join('');
+
+        return `
+          <tr class="hover:bg-emerald-50/30 transition">
+            <td class="cell-center text-xs font-semibold text-slate-400">${idx + 1}</td>
+            <td class="font-bold text-slate-900 whitespace-nowrap">
+              <div class="flex items-center gap-2">
+                <span class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 font-bold text-xs flex items-center justify-center">
+                  ${u.fullName.charAt(0)}
+                </span>
+                <span>${escapeHtml(u.fullName)}</span>
+              </div>
+            </td>
+            <td class="text-xs text-slate-600 whitespace-nowrap">${escapeHtml(u.position)}</td>
+            <td class="cell-center font-bold text-emerald-700 whitespace-nowrap">
+              <span class="badge-reported px-2.5 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1">
+                <i class="fa-solid fa-check"></i> ${reps.length} việc
+              </span>
+            </td>
+            <td class="cell-center font-bold text-sky-800 whitespace-nowrap">${totalPlanQty} SL</td>
+            <td class="text-xs text-slate-700 leading-relaxed">${planSummaries}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+  }
+}
+
+/**
+ * Sao chép danh sách nhân viên chưa nộp kế hoạch tuần gửi nhóm Zalo
+ */
+function copyUnreportedWeeklyPlanToClipboard() {
+  const targetWeek = appState.trackerSelectedWeek || '45';
+  const weekLabel = formatWeekLabel(targetWeek);
+  const activeEmployees = appState.users.filter(u => u.role === 'employee' && u.status === 'active');
+  const weekReports = appState.reports.filter(r => String(r.week) === targetWeek && ((r.planDetail && r.planDetail.trim()) || (r.planQuantity && r.planQuantity.trim()) || r.jobType));
+  const reportedSet = new Set(weekReports.map(r => r.employeeName));
+
+  const unrep = activeEmployees.filter(u => !reportedSet.has(u.fullName));
+
+  if (unrep.length === 0) {
+    alert(`🎉 Tuyệt vời! Toàn bộ ${activeEmployees.length} nhân viên đã nộp đầy đủ kế hoạch cho ${weekLabel}!`);
+    return;
+  }
+
+  let text = `📢 [THÔNG BÁO NHẮC NỘP KẾ HOẠCH DỰ KIẾN ${weekLabel.toUpperCase()}]\n`;
+  text += `Hệ thống ghi nhận có ${unrep.length}/${activeEmployees.length} nhân sự CHƯA nộp kế hoạch công việc dự kiến:\n`;
+  text += `--------------------------------------------------\n`;
+
+  unrep.forEach((u, i) => {
+    const link = getEmployeeDirectLink(u.username, 'plan');
+    text += `${i + 1}. ${u.fullName} (${u.position})\n`;
+    text += `   👉 Bấm vào đây để lên kế hoạch ngay: ${link}\n\n`;
+  });
+
+  text += `--------------------------------------------------\n`;
+  text += `⏰ Đề nghị các anh/chị bấm vào link riêng ở trên để đăng ký kế hoạch công việc trước đầu tuần.\n`;
+  text += `Xin cảm ơn!`;
+
+  copyTextToClipboard(
+    text,
+    `✅ Đã sao chép danh sách ${unrep.length} nhân viên chưa nộp kế hoạch ${weekLabel} kèm link riêng!\nBạn có thể dán (Ctrl + V) vào nhóm Zalo.`
+  );
+}
+
+/**
+ * Sao chép tin nhắn nhắc nhở nộp kế hoạch tuần cho 1 nhân viên kèm link riêng
+ */
+function copyReminderForWeeklyPlan(username, fullName, targetWeek) {
+  const weekNo = targetWeek || appState.trackerSelectedWeek || '45';
+  const weekLabel = formatWeekLabel(weekNo);
+  const link = getEmployeeDirectLink(username, 'plan');
+
+  const msg = `📢 [NHẮC NỘP KẾ HOẠCH DỰ KIẾN ${weekLabel.toUpperCase()}]
+Chào bạn ${fullName},
+Quản lý ghi nhận bạn CHƯA gửi kế hoạch công việc dự kiến cho ${weekLabel}.
+Vui lòng bấm vào đường link riêng của bạn dưới đây để lên kế hoạch nhanh cho Quản lý:
+👉 ${link}
+(Link sẽ tự động mở sẵn biểu mẫu Lập kế hoạch ${weekLabel} cho bạn, không cần đăng nhập lại)
+Xin cảm ơn!`;
+
+  copyTextToClipboard(
+    msg,
+    `✅ Đã sao chép tin nhắn nhắc nộp kế hoạch ${weekLabel} cho "${fullName}"!\nBạn có thể dán (Ctrl + V) gửi ngay qua Zalo.`
+  );
+}
+
+/**
+ * ========================================================
+ * 4.1.1. MODAL BÁO CÁO THỐNG KÊ NHÂN VIÊN CHƯA NỘP KẾ HOẠCH TUẦN GỬI ADMIN
+ * ========================================================
+ */
+
+function openWeeklyUnreportedSummaryModal() {
+  const weeks = getUniqueWeeks();
+  const select = document.getElementById('summary-modal-week-select');
+  const targetWeek = appState.trackerSelectedWeek || '45';
+
+  if (select) {
+    select.innerHTML = weeks.map(w => 
+      `<option value="${escapeHtml(w)}" ${w === targetWeek ? 'selected' : ''}>${formatWeekLabel(w)}</option>`
+    ).join('');
+    select.value = targetWeek;
+  }
+
+  renderSummaryModalContent(targetWeek);
+
+  const modal = document.getElementById('modal-weekly-unreported-summary');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeWeeklyUnreportedSummaryModal() {
+  const modal = document.getElementById('modal-weekly-unreported-summary');
+  if (modal) modal.classList.add('hidden');
+}
+
+function setSummaryModalWeek(weekVal) {
+  const select = document.getElementById('summary-modal-week-select');
+  if (select) select.value = weekVal;
+  renderSummaryModalContent(weekVal);
+}
+
+function renderSummaryModalContent(weekVal) {
+  const targetWeek = String(weekVal || appState.trackerSelectedWeek || '45');
+  const weekLabel = formatWeekLabel(targetWeek);
+  const weekRange = formatWeekRangeFull(targetWeek);
+
+  const activeEmployees = appState.users.filter(u => u.role === 'employee' && u.status === 'active');
+  const totalCount = activeEmployees.length;
+
+  const weekReports = appState.reports.filter(r => {
+    return String(r.week) === targetWeek && (
+      (r.planDetail && r.planDetail.trim()) ||
+      (r.planQuantity && r.planQuantity.trim()) ||
+      (r.planLocations && r.planLocations.trim()) ||
+      r.jobType
+    );
+  });
+
+  const reportedMap = new Map();
+  weekReports.forEach(r => {
+    if (r.employeeName) {
+      if (!reportedMap.has(r.employeeName)) {
+        reportedMap.set(r.employeeName, []);
+      }
+      reportedMap.get(r.employeeName).push(r);
+    }
+  });
+
+  const reportedList = [];
+  const unreportedList = [];
+
+  activeEmployees.forEach(u => {
+    if (reportedMap.has(u.fullName)) {
+      reportedList.push({ user: u, reports: reportedMap.get(u.fullName) });
+    } else {
+      unreportedList.push(u);
+    }
+  });
+
+  const rate = totalCount > 0 ? Math.round((reportedList.length / totalCount) * 100) : 0;
+
+  // Cập nhật thẻ KPI
+  const kpiTotal = document.getElementById('sm-kpi-total');
+  const kpiRep = document.getElementById('sm-kpi-reported');
+  const kpiUnrep = document.getElementById('sm-kpi-unreported');
+  const kpiRate = document.getElementById('sm-kpi-rate');
+  const timeEl = document.getElementById('summary-modal-time');
+
+  if (kpiTotal) kpiTotal.textContent = totalCount;
+  if (kpiRep) kpiRep.textContent = reportedList.length;
+  if (kpiUnrep) kpiUnrep.textContent = unreportedList.length;
+  if (kpiRate) kpiRate.textContent = `${rate}%`;
+
+  const now = new Date();
+  const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} ngày ${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+  if (timeEl) timeEl.textContent = `Xuất lúc: ${timeStr}`;
+
+  // Tạo mẫu văn bản báo cáo chuyên nghiệp gửi Admin / Ban Giám Đốc
+  const senderName = appState.currentUser ? appState.currentUser.fullName : 'Bộ phận Quản lý Kỹ thuật';
+  
+  let reportText = `📋 BÁO CÁO TỔNG HỢP: TÌNH HÌNH NỘP KẾ HOẠCH CÔNG VIỆC DỰ KIẾN\n`;
+  reportText += `Kính gửi: Ban Giám Đốc / Quản Trị Viên (Admin)\n`;
+  reportText += `Phạm vi: ${weekRange.toUpperCase()}\n`;
+  reportText += `Thời gian xuất: ${timeStr}\n`;
+  reportText += `Người tổng hợp: ${senderName}\n`;
+  reportText += `==================================================\n\n`;
+
+  reportText += `📊 1. TỔNG QUAN TIẾN ĐỘ NỘP KẾ HOẠCH DỰ KIẾN:\n`;
+  reportText += `• Tổng số nhân sự hoạt động: ${totalCount} nhân sự\n`;
+  reportText += `• Số nhân sự ĐÃ nộp kế hoạch: ${reportedList.length}/${totalCount} nhân sự (${rate}%)\n`;
+  reportText += `• Số nhân sự CHƯA nộp kế hoạch: ${unreportedList.length}/${totalCount} nhân sự (${100 - rate}%)\n\n`;
+
+  reportText += `🔴 2. DANH SÁCH NHÂN SỰ CHƯA BÁO CÁO KẾ HOẠCH ${weekLabel.toUpperCase()} (${unreportedList.length} nhân sự):\n`;
+  if (unreportedList.length === 0) {
+    reportText += `   👉 Không có (Toàn bộ 100% nhân sự đã nộp đầy đủ kế hoạch!)\n`;
+  } else {
+    unreportedList.forEach((u, idx) => {
+      reportText += `   ${idx + 1}. ${u.fullName} - ${u.position} (@${u.username})\n`;
+    });
+  }
+  reportText += `\n`;
+
+  reportText += `🟢 3. DANH SÁCH NHÂN SỰ ĐÃ NỘP KẾ HOẠCH (${reportedList.length} nhân sự):\n`;
+  if (reportedList.length === 0) {
+    reportText += `   👉 Chưa có nhân sự nào nộp kế hoạch.\n`;
+  } else {
+    reportedList.forEach((item, idx) => {
+      let totalQty = 0;
+      item.reports.forEach(r => {
+        const q = parseInt(r.planQuantity, 10);
+        if (!isNaN(q)) totalQty += q;
+      });
+      const jobTypes = Array.from(new Set(item.reports.map(r => r.jobType).filter(Boolean))).join(', ');
+      reportText += `   ${idx + 1}. ${item.user.fullName}: Đã lên ${item.reports.length} việc (${totalQty} SL) [${jobTypes}]\n`;
+    });
+  }
+  reportText += `\n`;
+
+  reportText += `📌 4. BIỆN PHÁP XỬ LÝ & ĐỀ XUẤT:\n`;
+  reportText += `• Bộ phận quản lý đã gửi link nhắc nhở báo cáo trực tiếp đến từng nhân viên chưa nộp.\n`;
+  reportText += `• Đề nghị các nhân sự trên hoàn thành đăng ký kế hoạch trước 17h00 hôm nay để kịp chốt lịch triển khai.\n\n`;
+  reportText += `Trân trọng báo cáo!`;
+
+  const textarea = document.getElementById('summary-modal-text-content');
+  if (textarea) textarea.value = reportText;
+}
+
+function copySummaryReportToAdmin() {
+  const textarea = document.getElementById('summary-modal-text-content');
+  const text = textarea ? textarea.value : '';
+  if (!text) {
+    alert("Không có nội dung báo cáo để sao chép!");
+    return;
+  }
+
+  copyTextToClipboard(
+    text,
+    "✅ Đã sao chép toàn bộ bản Báo cáo Thống kê gửi Admin!\nBạn có thể dán (Ctrl + V) trực tiếp vào Zalo gửi cho Ban Giám Đốc."
+  );
+}
+
+function downloadSummaryReportFile() {
+  const textarea = document.getElementById('summary-modal-text-content');
+  const text = textarea ? textarea.value : '';
+  const select = document.getElementById('summary-modal-week-select');
+  const targetWeek = select ? select.value : (appState.trackerSelectedWeek || '45');
+
+  if (!text) return;
+
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const dateSlug = new Date().toISOString().slice(0, 10);
+  a.download = `BaoCao_ChuaNopKeHoach_Tuan${targetWeek}_${dateSlug}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  showToast("✅ Đã tải file văn bản báo cáo về máy!", "success");
+}
+
+function printSummaryReport() {
+  const textarea = document.getElementById('summary-modal-text-content');
+  const text = textarea ? textarea.value : '';
+  if (!text) return;
+
+  const win = window.open('', '_blank', 'width=800,height=700');
+  win.document.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Báo Cáo Thống Kê Nhân Viên Chưa Nộp Kế Hoạch Tuần</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; padding: 25px; line-height: 1.6; color: #1e293b; }
+          pre { font-family: inherit; white-space: pre-wrap; font-size: 13px; line-height: 1.6; }
+          @media print {
+            body { padding: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        <pre>${escapeHtml(text)}</pre>
+      </body>
+    </html>
+  `);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { win.print(); }, 300);
+}
+
+/**
+ * 4.2. Thống kê Báo Cáo Thực Tế Theo Ngày
  */
 function renderDailyTrackerView() {
   const trackerInput = document.getElementById('tracker-date-input');
@@ -1304,14 +2078,26 @@ function getWeekdayName(dateVal) {
   return VI_WEEKDAYS[dt.getDay()] || '';
 }
 
-/** Tính ngày Thứ 2 và Chủ Nhật của một số tuần trong năm (ISO-8601) */
+/**
+ * Lấy ngày Thứ Hai của Tuần 1 trong năm
+ * Quy ước chuẩn lịch công ty: Tuần 45 bắt đầu từ Thứ Hai 09/11/2026 => Tuần 1 bắt đầu từ Thứ Hai 05/01/2026
+ */
+function getFirstMondayOfYear(year) {
+  const y = year || 2026;
+  if (y === 2026) return new Date(2026, 0, 5); // 05/01/2026
+  const jan1 = new Date(y, 0, 1);
+  const day = jan1.getDay() || 7; // 1 = Thứ 2, 7 = CN
+  const offset = day === 1 ? 0 : (8 - day);
+  return new Date(y, 0, 1 + offset);
+}
+
+/** Tính ngày Thứ 2 và Chủ Nhật của một số tuần trong năm (Tuần 45: 09/11 ➔ 15/11/2026) */
 function getDateRangeOfWeek(weekNo, year = new Date().getFullYear()) {
   const targetYear = year || new Date().getFullYear();
-  // 4 Tháng 1 luôn thuộc tuần 1 theo chuẩn ISO
-  const jan4 = new Date(targetYear, 0, 4);
-  const day = jan4.getDay() || 7; // 1 = Thứ 2, 7 = CN
-  const monday = new Date(jan4);
-  monday.setDate(jan4.getDate() + (weekNo - 1) * 7 - (day - 1));
+  const w1Mon = getFirstMondayOfYear(targetYear);
+
+  const monday = new Date(w1Mon);
+  monday.setDate(w1Mon.getDate() + (weekNo - 1) * 7);
   monday.setHours(0, 0, 0, 0);
 
   const sunday = new Date(monday);
@@ -1881,6 +2667,7 @@ function saveMultiPlanWeek() {
 
   // Thêm tất cả vào danh sách báo cáo
   appState.reports = [...validItems, ...appState.reports];
+  appState.empFilterWeek = targetWeek.toString(); // Tự động chọn đúng tuần vừa lưu kế hoạch
   saveData();
   populateDropdowns();
   renderApp();
@@ -1894,9 +2681,10 @@ function renderEmployeeView() {
   const user = appState.currentUser;
   const isEmployee = user.role === 'employee';
 
-  // Nếu là nhân viên, tên cố định theo tài khoản đang đăng nhập
+  // Nếu là nhân viên, tên cố định theo tài khoản đang đăng nhập; nếu là Admin, theo người đang chọn
   const empName = isEmployee ? user.fullName : (appState.currentEmployee || user.fullName);
-  const empRole = isEmployee ? user.position : 'Quản trị viên';
+  const empUser = appState.users.find(u => u.fullName === empName);
+  const empRole = empUser ? empUser.position : (isEmployee ? user.position : 'Quản lý / Trưởng bộ phận');
 
   // Hiển thị banner thông báo khi vào bằng Link Báo Cáo Riêng
   const directLinkBanner = document.getElementById('emp-direct-link-banner');
@@ -1910,16 +2698,27 @@ function renderEmployeeView() {
     }
   }
 
-  // Hiển thị thanh chuyển nhân viên cho Admin khi xem Cổng Nhân viên
+  // Hiển thị thanh chuyển nhân viên cho Admin khi xem Cổng Báo Cáo
   const adminBanner = document.getElementById('admin-emp-switch-banner');
   const adminSelect = document.getElementById('admin-view-emp-select');
   if (adminBanner && adminSelect) {
     if (!isEmployee) {
       adminBanner.style.display = 'flex';
+      const adminUser = appState.users.find(u => u.role === 'admin') || user;
       const employeeUsers = appState.users.filter(u => u.role === 'employee' && u.status === 'active');
-      adminSelect.innerHTML = employeeUsers.map(u => 
-        `<option value="${escapeHtml(u.fullName)}" ${u.fullName === empName ? 'selected' : ''}>${escapeHtml(u.fullName)} (${escapeHtml(u.position)})</option>`
+
+      let optHtml = `
+        <option value="${escapeHtml(adminUser.fullName)}" ${adminUser.fullName === empName ? 'selected' : ''}>
+          👑 ${escapeHtml(adminUser.fullName)} (${escapeHtml(adminUser.position || 'Quản lý')}) - Của tôi
+        </option>
+      `;
+      optHtml += employeeUsers.map(u => 
+        `<option value="${escapeHtml(u.fullName)}" ${u.fullName === empName ? 'selected' : ''}>
+          ${escapeHtml(u.fullName)} (${escapeHtml(u.position)})
+        </option>`
       ).join('');
+
+      adminSelect.innerHTML = optHtml;
     } else {
       adminBanner.style.display = 'none';
     }
@@ -1928,11 +2727,14 @@ function renderEmployeeView() {
   document.getElementById('emp-portal-name').textContent = empName;
   document.getElementById('emp-portal-role').textContent = empRole;
 
+  // Cập nhật bộ chọn tuần cho nhân viên (Hiển thị đầy đủ số lượng từng tuần)
+  updateEmployeeWeekDropdown(empName);
+
   // Lọc chỉ các báo cáo của nhân viên này
   let myReports = appState.reports.filter(r => r.employeeName === empName);
 
   if (appState.empFilterWeek !== 'all') {
-    myReports = myReports.filter(r => (r.week || '').toString() === appState.empFilterWeek);
+    myReports = myReports.filter(r => (r.week || '').toString() === appState.empFilterWeek.toString());
   }
 
   // Thống kê cá nhân
@@ -1960,17 +2762,19 @@ function renderEmployeeView() {
 
   const countBadge = document.getElementById('emp-records-count');
   if (countBadge) {
-    countBadge.textContent = `${myReports.length} đầu việc`;
+    const weekLabel = appState.empFilterWeek !== 'all' ? `Tuần ${appState.empFilterWeek}: ` : '';
+    countBadge.textContent = `${weekLabel}${myReports.length} đầu việc`;
   }
 
   // Render bảng danh sách công việc của Nhân viên (KHÔNG CÓ TỈ LỆ VÀ ĐÁNH GIÁ QUẢN LÝ)
   const tbody = document.getElementById('employee-table-body');
   if (myReports.length === 0) {
+    const scopeName = appState.empFilterWeek !== 'all' ? `Tuần ${appState.empFilterWeek}` : 'dữ liệu';
     tbody.innerHTML = `
       <tr>
-        <td colspan="10" class="py-12 text-center text-slate-400">
+        <td colspan="14" class="py-12 text-center text-slate-400">
           <i class="fa-regular fa-calendar-xmark text-4xl mb-3 text-slate-300 block"></i>
-          Chưa có kế hoạch nào trong tuần này. Hãy bấm nút <strong>"1. Lập Kế Hoạch Tuần"</strong> ở trên để lên kế hoạch công việc!
+          Chưa có kế hoạch nào trong <strong>${escapeHtml(scopeName)}</strong>. Hãy bấm nút <strong>"1. Lập Kế Hoạch Tuần"</strong> ở trên để lên kế hoạch công việc!
         </td>
       </tr>
     `;
@@ -2046,6 +2850,178 @@ function renderEmployeeView() {
 function filterEmployeeWeek(weekVal) {
   appState.empFilterWeek = weekVal;
   renderEmployeeView();
+}
+
+/**
+ * Lấy danh sách tất cả các tuần có dữ liệu của nhân viên (kèm tuần hiện tại)
+ */
+function getEmployeeAvailableWeeks(empName) {
+  const weeksSet = new Set();
+  weeksSet.add("45"); // Luôn có Tuần 45 (Bắt đầu từ 09/11/2026)
+  weeksSet.add("44");
+  const curWeek = getWeekNumber(new Date());
+  if (curWeek) {
+    weeksSet.add(curWeek.toString());
+    weeksSet.add((curWeek + 1).toString());
+  }
+
+  appState.reports.forEach(r => {
+    if (r.employeeName === empName && r.week !== undefined && r.week !== null && r.week.toString().trim() !== '') {
+      weeksSet.add(r.week.toString().trim());
+    }
+  });
+
+  return Array.from(weeksSet).sort((a, b) => {
+    const na = parseInt(a, 10);
+    const nb = parseInt(b, 10);
+    if (!isNaN(na) && !isNaN(nb)) return nb - na; // Tuần mới nhất xếp lên đầu
+    return b.localeCompare(a);
+  });
+}
+
+/**
+ * Cập nhật danh sách tuần trong dropdown lọc của nhân viên
+ */
+function updateEmployeeWeekDropdown(empName) {
+  const select = document.getElementById('emp-filter-week');
+  if (!select) return;
+
+  const curWeek = getWeekNumber(new Date());
+  const weeks = getEmployeeAvailableWeeks(empName);
+  const allEmpReports = appState.reports.filter(r => r.employeeName === empName);
+
+  let html = `<option value="all" ${appState.empFilterWeek === 'all' ? 'selected' : ''}>📂 Tất cả các tuần (Lưu trữ: ${allEmpReports.length} việc)</option>`;
+
+  weeks.forEach(w => {
+    const count = allEmpReports.filter(r => (r.week || '').toString() === w.toString()).length;
+    let label = formatWeekLabel(w);
+    if (parseInt(w, 10) === curWeek) {
+      label += ` (Hiện tại)`;
+    }
+    label += ` • ${count} việc`;
+    html += `<option value="${escapeHtml(w)}" ${appState.empFilterWeek.toString() === w.toString() ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+  });
+
+  select.innerHTML = html;
+}
+
+/**
+ * Chuyển đổi tuần trước / tuần sau cho nhân viên
+ */
+function navigateEmployeeWeek(delta) {
+  const user = appState.currentUser;
+  if (!user) return;
+  const isEmp = user.role === 'employee';
+  const empName = isEmp ? user.fullName : (appState.currentEmployee || user.fullName);
+  const weeks = getEmployeeAvailableWeeks(empName);
+  if (weeks.length === 0) return;
+
+  if (appState.empFilterWeek === 'all') {
+    // Nếu đang ở 'all', bấm Tuần trước (-1) sẽ mở tuần mới nhất; bấm Tuần sau (+1) mở tuần cũ nhất
+    appState.empFilterWeek = delta < 0 ? weeks[0] : weeks[weeks.length - 1];
+  } else {
+    let curIdx = weeks.indexOf(appState.empFilterWeek.toString());
+    if (curIdx === -1) {
+      curIdx = 0;
+    } else {
+      // Vì mảng xếp giảm dần (tuần lớn ở đầu):
+      // delta = -1 (Tuần trước/cũ hơn) -> tiến tới index lớn hơn
+      // delta = +1 (Tuần sau/mới hơn) -> lùi về index nhỏ hơn
+      curIdx = curIdx - delta;
+      if (curIdx < 0) curIdx = 0;
+      if (curIdx >= weeks.length) curIdx = weeks.length - 1;
+    }
+    appState.empFilterWeek = weeks[curIdx];
+  }
+
+  renderEmployeeView();
+}
+
+/**
+ * Mở modal xác nhận Xóa Hết Công Việc của Nhân viên
+ */
+function openClearEmployeeReportsModal() {
+  const user = appState.currentUser;
+  if (!user) return;
+  const isEmp = user.role === 'employee';
+  const empName = isEmp ? user.fullName : (appState.currentEmployee || user.fullName);
+
+  const allEmpReports = appState.reports.filter(r => r.employeeName === empName);
+  if (allEmpReports.length === 0) {
+    showToast("Bạn hiện chưa có công việc nào để xóa!", "info");
+    return;
+  }
+
+  const empInfoEl = document.getElementById('clear-modal-emp-info');
+  if (empInfoEl) empInfoEl.textContent = `Nhân viên: ${empName}`;
+
+  const currentWeek = appState.empFilterWeek;
+  const weekScopeWrapper = document.getElementById('clear-opt-week-wrapper');
+  const weekScopeLabel = document.getElementById('clear-scope-week-label');
+  const weekScopeDesc = document.getElementById('clear-scope-week-desc');
+  const radioWeek = document.getElementById('clear-scope-week');
+  const radioAll = document.getElementById('clear-scope-all');
+
+  if (currentWeek !== 'all') {
+    const weekCount = allEmpReports.filter(r => (r.week || '').toString() === currentWeek.toString()).length;
+    if (weekScopeWrapper) weekScopeWrapper.style.display = 'flex';
+    if (weekScopeLabel) weekScopeLabel.textContent = `Chỉ xóa các việc trong Tuần ${currentWeek} (${weekCount} việc)`;
+    if (weekScopeDesc) weekScopeDesc.textContent = `Chỉ xóa kế hoạch và tiến độ của Tuần ${currentWeek}. Dữ liệu các tuần khác (${allEmpReports.length - weekCount} việc) vẫn được lưu trữ nguyên vẹn để xem lại!`;
+    if (radioWeek) radioWeek.checked = true;
+  } else {
+    if (weekScopeWrapper) weekScopeWrapper.style.display = 'none';
+    if (radioAll) radioAll.checked = true;
+  }
+
+  const modal = document.getElementById('clear-emp-reports-modal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+/**
+ * Đóng modal Xóa Hết
+ */
+function closeClearEmployeeReportsModal() {
+  const modal = document.getElementById('clear-emp-reports-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+/**
+ * Thực thi xóa các công việc đã chọn của Nhân viên
+ */
+function handleExecuteClearEmployeeReports() {
+  const user = appState.currentUser;
+  if (!user) return;
+  const isEmp = user.role === 'employee';
+  const empName = isEmp ? user.fullName : (appState.currentEmployee || user.fullName);
+
+  const radioWeek = document.getElementById('clear-scope-week');
+  const currentWeek = appState.empFilterWeek;
+  const isWeekOnly = radioWeek && radioWeek.checked && currentWeek !== 'all';
+
+  let deletedCount = 0;
+  if (isWeekOnly) {
+    const initialLen = appState.reports.length;
+    appState.reports = appState.reports.filter(r => !(r.employeeName === empName && (r.week || '').toString() === currentWeek.toString()));
+    deletedCount = initialLen - appState.reports.length;
+  } else {
+    const initialLen = appState.reports.length;
+    appState.reports = appState.reports.filter(r => r.employeeName !== empName);
+    deletedCount = initialLen - appState.reports.length;
+  }
+
+  const syncPayload = isWeekOnly 
+    ? { action: 'clear_week', employeeName: empName, week: currentWeek }
+    : { action: 'clear_employee', employeeName: empName };
+  saveData(syncPayload);
+  populateDropdowns();
+  closeClearEmployeeReportsModal();
+  renderApp();
+
+  if (isWeekOnly) {
+    showToast(`✅ Đã xóa ${deletedCount} công việc của Tuần ${currentWeek}. Dữ liệu các tuần khác vẫn được lưu giữ an toàn!`, "success");
+  } else {
+    showToast(`✅ Đã xóa toàn bộ ${deletedCount} công việc của nhân viên ${empName}!`, "success");
+  }
 }
 
 function openPlanModal() {
@@ -2159,6 +3135,13 @@ function openReportModal(reportId = null, mode = 'full') {
     nameInput.classList.remove('bg-slate-200');
     posInput.readOnly = false;
     posInput.classList.remove('bg-slate-200');
+
+    if (!reportId) {
+      const currentTargetName = appState.currentEmployee || user.fullName;
+      const targetUser = appState.users.find(u => u.fullName === currentTargetName) || user;
+      nameInput.value = targetUser.fullName;
+      posInput.value = targetUser.position || 'Quản lý / Trưởng bộ phận';
+    }
   }
 
   if (reportId) {
@@ -2352,7 +3335,7 @@ function deleteReport(reportId) {
 
   if (confirm(confirmMsg)) {
     appState.reports = appState.reports.filter(r => r.id !== reportId);
-    saveData();
+    saveData({ action: 'delete', id: reportId });
     populateDropdowns();
     renderApp();
   }
@@ -3388,7 +4371,7 @@ function resetDefaultData() {
 function clearAllReports() {
   if (confirm("⚠️ CẢNH BÁO XÓA DỮ LIỆU:\n\nBạn có chắc chắn muốn XÓA TOÀN BỘ tất cả báo cáo hiện có trong hệ thống không?\n\n- Sau khi xóa, danh sách sẽ trở về trạng thái trống hoàn toàn để bạn bắt đầu nhập mới.\n- Bạn vẫn có thể nạp lại 288 báo cáo mẫu bất kỳ lúc nào nếu cần.")) {
     appState.reports = [];
-    saveData();
+    saveData({ action: 'clear_all' });
     populateDropdowns();
     renderApp();
     alert("Đã xóa toàn bộ báo cáo thành công! Hệ thống hiện đang trống để bạn bắt đầu nhập kế hoạch mới.");
@@ -3406,11 +4389,26 @@ function escapeHtml(str) {
 }
 
 function getWeekNumber(d) {
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dayNum = date.getUTCDay() || 7;
-  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+  if (!d) return 1;
+  const dateObj = (d instanceof Date) ? new Date(d.getTime()) : new Date(d);
+  if (isNaN(dateObj.getTime())) return 1;
+
+  const y = dateObj.getFullYear();
+  const w1Mon = getFirstMondayOfYear(y);
+
+  // Tìm ngày Thứ Hai của tuần chứa dateObj
+  const curDay = dateObj.getDay() || 7; // 1 = T2, ..., 7 = CN
+  const thisMonday = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate() - (curDay - 1));
+  thisMonday.setHours(0, 0, 0, 0);
+
+  if (thisMonday.getTime() < w1Mon.getTime()) {
+    const prevYearW1 = getFirstMondayOfYear(y - 1);
+    const diff = Math.round((thisMonday.getTime() - prevYearW1.getTime()) / 86400000);
+    return Math.floor(diff / 7) + 1;
+  }
+
+  const diffDays = Math.round((thisMonday.getTime() - w1Mon.getTime()) / 86400000);
+  return Math.floor(diffDays / 7) + 1;
 }
 
 function setupEventListeners() {
