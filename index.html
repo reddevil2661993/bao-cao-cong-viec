@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hệ Thống Báo Cáo Công Việc Hàng Ngày & Quản Lý Tiến Độ</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Google Fonts Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased min-h-screen flex flex-col">
+
+  <!-- ========================================================
+       MÀN HÌNH ĐĂNG NHẬP (LOGIN SCREEN)
+       ======================================================== -->
+  <div id="login-screen" class="fixed inset-0 z-50 flex items-center justify-center p-4 login-bg">
+    <div class="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl max-w-md w-full p-8 border border-white/20 animate-fade-in relative z-10">
+      
+      <!-- Brand Header -->
+      <div class="text-center mb-6">
+        <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-700 to-emerald-600 text-white flex items-center justify-center mx-auto mb-3 shadow-lg shadow-blue-500/30 text-2xl">
+          <i class="fa-solid fa-chart-line"></i>
+        </div>
+        <h2 class="text-xl font-extrabold text-slate-900 tracking-tight">HỆ THỐNG BÁO CÁO CÔNG VIỆC</h2>
+        <p class="text-xs text-slate-500 mt-1">Kỹ thuật & Triển khai DP LCD / Poster GP</p>
+      </div>
+
+      <!-- Alert thông báo lỗi -->
+      <div id="login-error" class="hidden mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs font-semibold text-rose-700 text-center"></div>
+
+      <!-- Form Đăng Nhập -->
+      <form id="login-form" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">Tên đăng nhập</label>
+          <div class="relative">
+            <i class="fa-solid fa-user absolute left-3.5 top-3 text-slate-400 text-sm"></i>
+            <input type="text" id="login-username" required placeholder="Nhập tên đăng nhập..." class="w-full bg-slate-50 border border-slate-300 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition font-medium">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">Mật khẩu</label>
+          <div class="relative">
+            <i class="fa-solid fa-lock absolute left-3.5 top-3 text-slate-400 text-sm"></i>
+            <input type="password" id="login-password" required placeholder="••••••••" class="w-full bg-slate-50 border border-slate-300 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition font-medium">
+          </div>
+        </div>
+
+        <button type="submit" class="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-sm shadow-lg shadow-blue-500/25 transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-right-to-bracket"></i>
+          <span>Đăng Nhập Hệ Thống</span>
+        </button>
+      </form>
+
+      <!-- Khối Gợi Ý & Đăng Nhập Nhanh -->
+      <div class="mt-6 pt-5 border-t border-slate-200 space-y-3">
+        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider text-center">
+          Tài khoản mẫu để thử nghiệm nhanh:
+        </div>
+
+        <!-- Nút đăng nhập Admin 1-click -->
+        <button type="button" onclick="quickLogin('admin', 'admin123')" class="w-full py-2 px-3 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 font-bold text-xs flex items-center justify-between transition">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-crown text-amber-500"></i>
+            <span>Đăng nhập Admin (Quản lý)</span>
+          </div>
+          <span class="font-mono text-[11px] bg-white px-2 py-0.5 rounded border border-amber-300 text-amber-800">admin / admin123</span>
+        </button>
+
+        <!-- Dropdown chọn nhanh tài khoản Nhân viên -->
+        <div>
+          <select id="quick-emp-select" onchange="if(this.value) quickLogin(this.value, '123456')" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 text-xs font-semibold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
+            <!-- Render JS -->
+          </select>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========================================================
+       MÀN HÌNH ỨNG DỤNG CHÍNH (APP SCREEN)
+       ======================================================== -->
+  <div id="app-screen" class="hidden flex-1 flex flex-col">
+
+    <!-- ================= HEADER THANH ĐIỀU HƯỚNG ================= -->
+    <header class="header-glass sticky top-0 z-40 shadow-sm border-b border-slate-200">
+      <div class="max-w-[1920px] mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
+        
+        <!-- Brand Logo & Title -->
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-700 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
+            <i class="fa-solid fa-chart-line text-lg"></i>
+          </div>
+          <div>
+            <h1 class="text-lg font-bold text-slate-900 leading-tight flex items-center gap-2">
+              BÁO CÁO CÔNG VIỆC HÀNG NGÀY
+            </h1>
+            <p class="text-xs text-slate-500">Kỹ thuật & Triển khai DP LCD / Poster GP</p>
+          </div>
+        </div>
+
+        <!-- Menu Tabs Quản Trị (CHỈ HIỆN KHI ĐĂNG NHẬP ADMIN) -->
+        <div id="manager-nav-group" class="flex items-center bg-slate-200/80 p-1 rounded-xl shadow-inner border border-slate-300/60 gap-1" style="display: none;">
+          <button id="btn-tab-reports" onclick="switchAdminTab('reports')" class="px-3.5 py-1.5 text-xs font-bold rounded-lg bg-blue-700 text-white shadow-sm flex items-center gap-1.5">
+            <i class="fa-solid fa-table-list"></i>
+            <span>Tổng Hợp Báo Cáo</span>
+          </button>
+          
+          <button id="btn-tab-tracker" onclick="switchAdminTab('daily_tracker')" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg text-slate-600 hover:bg-slate-100 flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-calendar-check text-emerald-600"></i>
+            <span>Thống Kê Ngày & Ai Chưa Báo Cáo</span>
+          </button>
+
+          <button id="btn-tab-users" onclick="switchAdminTab('user_manager')" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg text-slate-600 hover:bg-slate-100 flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-users-gear text-indigo-600"></i>
+            <span>Quản Lý Tài Khoản</span>
+          </button>
+
+          <button id="btn-nav-employee" onclick="switchAdminTab('employee_view')" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg text-slate-600 hover:bg-slate-100 flex items-center gap-1.5 transition" title="Xem giao diện Cổng Nhân Viên">
+            <i class="fa-solid fa-eye text-teal-600"></i>
+            <span>Xem Cổng NV</span>
+          </button>
+        </div>
+
+        <!-- User Info & Actions -->
+        <div class="flex items-center flex-wrap gap-3">
+          
+          <!-- Thông tin User đang đăng nhập -->
+          <div class="flex items-center gap-2.5 bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-sm">
+            <div id="header-user-avatar" class="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
+              A
+            </div>
+            <div class="text-left">
+              <div id="header-user-name" class="text-xs font-bold text-slate-900 leading-tight">Admin</div>
+              <div id="header-user-role-badge" class="text-[10px] font-semibold text-slate-500">Quản trị viên</div>
+            </div>
+            <button onclick="handleLogout()" class="ml-1 text-slate-400 hover:text-rose-600 transition p-1" title="Đăng xuất khỏi hệ thống">
+              <i class="fa-solid fa-right-from-bracket text-sm"></i>
+            </button>
+          </div>
+
+          <!-- Nhóm công cụ Quản lý (Chỉ hiện khi Admin) -->
+          <div id="header-admin-tools" class="flex items-center gap-2" style="display: none;">
+            <!-- Nút xuất Excel -->
+            <button onclick="exportToExcel()" class="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm transition" title="Xuất toàn bộ bảng ra file Excel đúng mẫu">
+              <i class="fa-solid fa-file-excel"></i>
+              <span>Xuất Excel</span>
+            </button>
+
+            <!-- Nút Xóa toàn bộ báo cáo -->
+            <button onclick="clearAllReports()" class="px-3 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm transition" title="Xóa toàn bộ tất cả báo cáo để làm mới từ đầu">
+              <i class="fa-solid fa-trash-can"></i>
+              <span>Xóa Toàn Bộ</span>
+            </button>
+
+            <!-- Menu 3 chấm -->
+            <div class="relative group">
+              <button class="px-2.5 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-xs flex items-center gap-1 shadow-sm transition">
+                <i class="fa-solid fa-ellipsis-vertical"></i>
+              </button>
+              <div class="absolute right-0 mt-1 w-52 bg-white border border-slate-200 rounded-lg shadow-xl py-1 hidden group-hover:block z-50">
+                <button onclick="exportToCSV()" class="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2">
+                  <i class="fa-solid fa-file-csv text-emerald-600"></i> Xuất file CSV
+                </button>
+                <label class="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2 cursor-pointer">
+                  <i class="fa-solid fa-file-arrow-up text-blue-600"></i> Nhập file Excel / CSV
+                  <input type="file" id="import-file-input" accept=".xlsx, .xls, .csv" class="hidden">
+                </label>
+                <button onclick="window.print()" class="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2">
+                  <i class="fa-solid fa-print text-purple-600"></i> In trang / Lưu PDF
+                </button>
+                <hr class="my-1 border-slate-200">
+                <button onclick="resetDefaultData()" class="w-full text-left px-3 py-2 text-xs text-blue-600 hover:bg-blue-50 flex items-center gap-2">
+                  <i class="fa-solid fa-rotate-left"></i> Khôi phục dữ liệu mẫu
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </header>
+
+    <!-- In tiêu đề khi print -->
+    <div class="print-header">
+      <h1 style="font-size: 16pt; font-weight: bold; text-align: center;">BẢNG TỔNG HỢP TIẾN ĐỘ CÔNG VIỆC HÀNG NGÀY</h1>
+      <p style="font-size: 10pt; text-align: center; color: #555;">Bộ phận Kỹ thuật - Màn hình DP LCD & Poster Thang máy GP</p>
+      <hr style="margin: 10px 0;">
+    </div>
+
+    <!-- ================= MAIN CONTENT ================= -->
+    <main class="max-w-[1920px] w-full mx-auto px-2 sm:px-4 py-4 flex-1">
+
+      <!-- ========================================================
+           TAB ADMIN 1: TỔNG HỢP BÁO CÁO (CHỈ ADMIN)
+           ======================================================== -->
+      <div id="manager-view" class="space-y-5 animate-fade-in" style="display: none;">
+        
+        <!-- 1. KPI Cards Dashboard -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+          <div class="card p-4 border-l-4 border-blue-600">
+            <div class="flex items-center justify-between text-slate-500 mb-1">
+              <span class="text-xs font-semibold uppercase">Tổng lượt báo cáo</span>
+              <i class="fa-solid fa-list-check text-blue-500"></i>
+            </div>
+            <div id="kpi-total-reports" class="text-2xl font-bold text-slate-900">0</div>
+            <span class="text-[11px] text-slate-400">Ghi nhận trong bộ lọc</span>
+          </div>
+
+          <div class="card p-4 border-l-4 border-indigo-600">
+            <div class="flex items-center justify-between text-slate-500 mb-1">
+              <span class="text-xs font-semibold uppercase">Nhân sự tham gia</span>
+              <i class="fa-solid fa-users text-indigo-500"></i>
+            </div>
+            <div id="kpi-total-employees" class="text-2xl font-bold text-indigo-900">0</div>
+            <span class="text-[11px] text-slate-400">Thành viên đội kỹ thuật</span>
+          </div>
+
+          <div class="card p-4 border-l-4 border-emerald-600">
+            <div class="flex items-center justify-between text-slate-500 mb-1">
+              <span class="text-xs font-semibold uppercase">Tỉ lệ hoàn thành TB</span>
+              <i class="fa-solid fa-bullseye text-emerald-500"></i>
+            </div>
+            <div id="kpi-avg-rate" class="text-2xl font-bold text-emerald-600">0%</div>
+            <span class="text-[11px] text-slate-400">Quản lý theo dõi</span>
+          </div>
+
+          <div class="card p-4 border-l-4 border-sky-600">
+            <div class="flex items-center justify-between text-slate-500 mb-1">
+              <span class="text-xs font-semibold uppercase">Địa điểm (Thực/Dự)</span>
+              <i class="fa-solid fa-location-dot text-sky-500"></i>
+            </div>
+            <div id="kpi-locations-stat" class="text-2xl font-bold text-sky-900">0 / 0</div>
+            <span class="text-[11px] text-slate-400">Điểm trường, chung cư, shop</span>
+          </div>
+
+          <div class="card p-4 border-l-4 border-purple-600">
+            <div class="flex items-center justify-between text-slate-500 mb-1">
+              <span class="text-xs font-semibold uppercase">Khối lượng (Màn/Tấm)</span>
+              <i class="fa-solid fa-layer-group text-purple-500"></i>
+            </div>
+            <div id="kpi-quantity-stat" class="text-2xl font-bold text-purple-900">0 / 0</div>
+            <span class="text-[11px] text-slate-400">Tổng thiết bị thực tế / dự kiến</span>
+          </div>
+        </div>
+
+        <!-- 2. Biểu đồ trực quan (Charts) -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 no-print">
+          <div class="card p-4 lg:col-span-2">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <i class="fa-solid fa-chart-column text-blue-600"></i>
+                Tỉ lệ hoàn thành trung bình theo nhân sự (%)
+              </h3>
+              <span class="text-[11px] text-slate-400">Top 10 nhân sự</span>
+            </div>
+            <div class="h-48 w-full">
+              <canvas id="chart-employee-rate"></canvas>
+            </div>
+          </div>
+
+          <div class="card p-4">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <i class="fa-solid fa-chart-pie text-purple-600"></i>
+                Phân bổ cơ cấu công việc
+              </h3>
+              <span class="text-[11px] text-slate-400">Số lượt phân công</span>
+            </div>
+            <div class="h-48 w-full">
+              <canvas id="chart-job-distribution"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Bộ lọc dữ liệu thông minh (Filter Bar) -->
+        <div class="card p-3.5 bg-white border border-slate-200 filter-section shadow-sm">
+          <div class="flex flex-wrap items-center gap-3">
+            <div class="flex-1 min-w-[130px]">
+              <label class="block text-[11px] font-semibold text-slate-600 mb-1">Tuần làm việc</label>
+              <select id="filter-week" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:bg-white focus:ring-1 focus:ring-blue-500 outline-none">
+                <option value="all">Tất cả các tuần</option>
+              </select>
+            </div>
+
+            <div class="flex-1 min-w-[160px]">
+              <label class="block text-[11px] font-semibold text-slate-600 mb-1">Nhân viên</label>
+              <select id="filter-employee" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:bg-white focus:ring-1 focus:ring-blue-500 outline-none">
+                <option value="all">Tất cả nhân viên</option>
+              </select>
+            </div>
+
+            <div class="flex-1 min-w-[160px]">
+              <label class="block text-[11px] font-semibold text-slate-600 mb-1">Loại công việc</label>
+              <select id="filter-job-type" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:bg-white focus:ring-1 focus:ring-blue-500 outline-none">
+                <option value="all">Tất cả loại công việc</option>
+              </select>
+            </div>
+
+            <div class="flex-1 min-w-[140px]">
+              <label class="block text-[11px] font-semibold text-slate-600 mb-1">Tỉ lệ hoàn thành</label>
+              <select id="filter-rate-status" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:bg-white focus:ring-1 focus:ring-blue-500 outline-none">
+                <option value="all">Tất cả tiến độ</option>
+                <option value="complete">Hoàn thành (≥ 100%)</option>
+                <option value="partial">Khá / Đạt một phần (50-99%)</option>
+                <option value="low">Kém / Cần chú ý (&lt; 50%)</option>
+                <option value="zero">Hủy / Không làm được (0%)</option>
+              </select>
+            </div>
+
+            <div class="flex-2 min-w-[200px]">
+              <label class="block text-[11px] font-semibold text-slate-600 mb-1">Tìm kiếm từ khóa</label>
+              <div class="relative">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                <input type="text" id="filter-search" placeholder="Tên tòa nhà, trường học, mã máy, ghi chú..." class="w-full bg-slate-50 border border-slate-300 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-700 focus:bg-white focus:ring-1 focus:ring-blue-500 outline-none">
+              </div>
+            </div>
+
+            <div class="flex items-end self-end">
+              <button onclick="resetFilters()" class="px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-100 text-slate-600 text-xs font-semibold flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-filter-circle-xmark"></i>
+                <span>Đặt lại</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Bảng tổng hợp công việc cho Quản lý -->
+        <div class="card overflow-hidden">
+          <div class="px-4 py-3 bg-white border-b border-slate-200 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-table-list text-blue-600"></i>
+              <h2 class="text-sm font-bold text-slate-800">BẢNG TỔNG HỢP KẾ HOẠCH DỰ KIẾN & TIẾN ĐỘ THỰC TẾ</h2>
+              <span id="table-records-count" class="text-xs px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 font-semibold">0 báo cáo</span>
+            </div>
+            <div class="text-xs text-slate-500 flex items-center gap-3">
+              <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-emerald-500 inline-block"></span> Đạt chuẩn (≥100%)</span>
+              <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-amber-400 inline-block"></span> Một phần (80-99%)</span>
+              <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-rose-500 inline-block"></span> Thấp (&lt;80%)</span>
+            </div>
+          </div>
+
+          <div id="manager-table-container" class="excel-table-container max-h-[70vh] overflow-x-auto overflow-y-auto">
+            <table class="excel-table">
+              <thead class="sticky top-0 z-20">
+                <tr class="th-group-main">
+                  <th rowspan="2" class="th-fixed w-10 cell-center">STT</th>
+                  <th rowspan="2" class="th-fixed w-12 cell-center">Tuần</th>
+                  <th rowspan="2" class="th-fixed w-24 cell-center whitespace-nowrap">Ngày</th>
+                  <th rowspan="2" class="th-fixed whitespace-nowrap px-2.5 min-w-[130px]">Họ tên</th>
+                  <th rowspan="2" class="th-fixed whitespace-nowrap cell-center px-2 min-w-[90px]">Chức vụ</th>
+                  <th rowspan="2" class="th-fixed whitespace-nowrap cell-center px-2 min-w-[110px]">CÔNG VIỆC</th>
+                  
+                  <th colspan="3" class="th-group-plan">
+                    <i class="fa-solid fa-calendar-check mr-1"></i> KẾ HOẠCH DỰ KIẾN
+                  </th>
+
+                  <th colspan="3" class="th-group-actual">
+                    <i class="fa-solid fa-circle-check mr-1"></i> TIẾN ĐỘ THỰC TẾ
+                  </th>
+
+                  <th rowspan="2" class="th-fixed min-w-[130px]">Ghi chú & Lý do</th>
+                  <th rowspan="2" class="th-fixed w-24 cell-center whitespace-nowrap">Tỉ lệ HT</th>
+                  <th rowspan="2" class="th-fixed min-w-[125px] whitespace-nowrap px-2">Đánh giá Quản lý</th>
+                  <th rowspan="2" class="th-fixed w-16 cell-center no-print">Thao tác</th>
+                </tr>
+
+                <tr>
+                  <th class="th-sub-plan w-14 cell-center whitespace-nowrap" title="Số lượng địa điểm">SL ĐĐ</th>
+                  <th class="th-sub-plan w-14 cell-center whitespace-nowrap" title="Số lượng thiết bị">Số lượng</th>
+                  <th class="th-sub-plan min-w-[280px]">Chi tiết</th>
+
+                  <th class="th-sub-actual w-14 cell-center whitespace-nowrap" title="Số lượng địa điểm">SL ĐĐ</th>
+                  <th class="th-sub-actual w-14 cell-center whitespace-nowrap" title="Số lượng thiết bị">Số lượng</th>
+                  <th class="th-sub-actual min-w-[280px]">Chi tiết</th>
+                </tr>
+              </thead>
+              <tbody id="manager-table-body" class="divide-y divide-slate-200">
+                <!-- Render JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ========================================================
+           TAB ADMIN 2: THỐNG KÊ BÁO CÁO NGÀY & AI CHƯA BÁO CÁO (MỚI)
+           ======================================================== -->
+      <div id="admin-tracker-view" class="space-y-5 animate-fade-in" style="display: none;">
+        
+        <!-- Thanh chọn ngày kiểm tra & Công cụ nhắc nhở -->
+        <div class="card p-4 bg-gradient-to-r from-blue-900 to-indigo-800 text-white shadow-md">
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <div class="text-xs text-blue-200 uppercase tracking-wider font-bold">Giám sát điểm danh báo cáo</div>
+              <h2 class="text-lg font-bold flex items-center gap-2">
+                <i class="fa-solid fa-clipboard-user text-emerald-400"></i>
+                THỐNG KÊ TÌNH HÌNH BÁO CÁO CÔNG VIỆC TRONG NGÀY
+              </h2>
+              <p class="text-xs text-blue-100">Kiểm tra ngay nhân viên nào đã nộp hoặc chưa nộp báo cáo thực tế</p>
+            </div>
+
+            <!-- Bộ chọn ngày -->
+            <div class="flex items-center gap-3">
+              <div class="bg-white/10 backdrop-blur-md p-1.5 rounded-xl border border-white/20 flex items-center gap-2">
+                <span class="text-xs font-semibold text-white pl-2">Chọn ngày:</span>
+                <input type="text" id="tracker-date-input" placeholder="VD: 06/11/2026" class="bg-white text-slate-800 rounded-lg px-3 py-1.5 text-xs font-bold outline-none border border-slate-300 w-32 text-center">
+                <select id="tracker-quick-dates" onchange="if(this.value){ document.getElementById('tracker-date-input').value=this.value; handleTrackerDateChange(this.value); }" class="bg-white text-slate-800 rounded-lg px-2.5 py-1.5 text-xs font-bold outline-none border border-slate-300">
+                  <option value="">-- Ngày có dữ liệu gần đây --</option>
+                </select>
+                <button type="button" onclick="initTrackerDate(); renderDailyTrackerView();" class="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold" title="Xem ngày hôm nay">
+                  Hôm nay
+                </button>
+              </div>
+
+              <!-- Nút sao chép danh sách chưa báo cáo -->
+              <button onclick="copyUnreportedToClipboard()" class="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-2">
+                <i class="fa-solid fa-copy"></i>
+                <span>Copy DS Chưa Báo Cáo (Gửi Zalo)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Thẻ KPI thống kê ngày -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-blue-700/60">
+            <div>
+              <div class="text-xs text-blue-200">Tổng nhân sự hoạt động</div>
+              <div id="tracker-total-emps" class="text-2xl font-bold">0</div>
+            </div>
+            <div>
+              <div class="text-xs text-emerald-300 font-semibold">🟢 Đã nộp báo cáo ngày</div>
+              <div id="tracker-reported-count" class="text-2xl font-bold text-emerald-300">0</div>
+            </div>
+            <div>
+              <div class="text-xs text-rose-300 font-semibold">🔴 CHƯA BÁO CÁO NGÀY</div>
+              <div id="tracker-unreported-count" class="text-2xl font-bold text-rose-300">0</div>
+            </div>
+            <div>
+              <div class="text-xs text-blue-200">Tỷ lệ hoàn thành nộp</div>
+              <div id="tracker-rate-percent" class="text-2xl font-bold text-white">0%</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Khối 2 Bảng: Chưa báo cáo & Đã báo cáo -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          
+          <!-- Cột 1 (5 cols): Danh sách CHƯA BÁO CÁO (Nổi bật) -->
+          <div class="lg:col-span-5 card overflow-hidden border-rose-300 shadow-md">
+            <div class="px-4 py-3 bg-rose-50 border-b border-rose-200 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <i class="fa-solid fa-triangle-exclamation text-rose-600 text-base"></i>
+                <h3 class="text-sm font-bold text-rose-900 uppercase tracking-tight">NHÂN VIÊN CHƯA BÁO CÁO NGÀY</h3>
+              </div>
+              <span id="tracker-unreported-badge" class="text-xs px-2.5 py-0.5 rounded-full bg-rose-600 text-white font-bold">0 nhân sự</span>
+            </div>
+
+            <div class="overflow-x-auto max-h-[500px]">
+              <table class="excel-table">
+                <thead class="sticky top-0 z-10 bg-slate-100">
+                  <tr>
+                    <th class="w-10 cell-center">STT</th>
+                    <th>Họ và tên nhân viên</th>
+                    <th>Chức vụ</th>
+                    <th>Tài khoản</th>
+                    <th class="cell-center">Trạng thái</th>
+                    <th class="cell-center w-36">Gửi Link Báo Cáo</th>
+                  </tr>
+                </thead>
+                <tbody id="tracker-unreported-body" class="divide-y divide-rose-100">
+                  <!-- Render JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Cột 2 (7 cols): Danh sách ĐÃ BÁO CÁO -->
+          <div class="lg:col-span-7 card overflow-hidden border-emerald-300 shadow-md">
+            <div class="px-4 py-3 bg-emerald-50 border-b border-emerald-200 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <i class="fa-solid fa-circle-check text-emerald-600 text-base"></i>
+                <h3 class="text-sm font-bold text-emerald-900 uppercase tracking-tight">NHÂN VIÊN ĐÃ GỬI BÁO CÁO NGÀY</h3>
+              </div>
+              <span id="tracker-reported-badge" class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-600 text-white font-bold">0 nhân sự</span>
+            </div>
+
+            <div class="overflow-x-auto max-h-[500px]">
+              <table class="excel-table">
+                <thead class="sticky top-0 z-10 bg-slate-100">
+                  <tr>
+                    <th class="w-10 cell-center">STT</th>
+                    <th>Họ và tên nhân viên</th>
+                    <th>Chức vụ</th>
+                    <th>Loại công việc đã báo</th>
+                    <th class="cell-center">Thực tế (ĐĐ / SL)</th>
+                    <th class="cell-center">Số đầu việc</th>
+                  </tr>
+                </thead>
+                <tbody id="tracker-reported-body" class="divide-y divide-emerald-100">
+                  <!-- Render JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- ========================================================
+           TAB ADMIN 3: QUẢN LÝ TÀI KHOẢN NHÂN VIÊN (CHỈ ADMIN)
+           ======================================================== -->
+      <div id="admin-users-view" class="space-y-5 animate-fade-in" style="display: none;">
+        
+        <div class="card p-5 bg-white border border-slate-200">
+          <div class="flex flex-wrap items-center justify-between gap-4 mb-4 pb-3 border-b border-slate-200">
+            <div>
+              <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                <i class="fa-solid fa-users-gear text-indigo-600"></i>
+                DANH SÁCH TÀI KHOẢN HỆ THỐNG
+              </h2>
+              <p class="text-xs text-slate-500">Tài khoản Admin có quyền tạo thêm tài khoản con cho nhân viên báo cáo</p>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2.5">
+              <span id="users-count-badge" class="text-xs px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 font-bold">0 tài khoản</span>
+              <button onclick="copyAllEmployeeLinks()" class="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-300 shadow-sm transition flex items-center gap-1.5" title="Sao chép toàn bộ đường link của tất cả nhân viên">
+                <i class="fa-solid fa-share-nodes text-indigo-600"></i>
+                <span>Copy DS Link Tất Cả NV</span>
+              </button>
+              <button onclick="openConfigUrlModal()" class="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-300 shadow-sm transition flex items-center gap-1.5" title="Cài đặt địa chỉ Web/LAN khi chia sẻ qua mạng">
+                <i class="fa-solid fa-gear text-slate-600"></i>
+                <span>Cấu hình Link Web/LAN</span>
+              </button>
+              <button onclick="openCreateUserModal()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow transition flex items-center gap-1.5">
+                <i class="fa-solid fa-user-plus"></i>
+                <span>Tạo Tài Khoản Nhân Viên Mới</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="excel-table-container max-h-[580px] overflow-y-auto">
+            <table class="excel-table">
+              <thead class="sticky top-0 z-10 bg-slate-100">
+                <tr>
+                  <th class="w-10 cell-center">STT</th>
+                  <th>Tên đăng nhập (Username)</th>
+                  <th>Họ và tên nhân viên</th>
+                  <th>Chức vụ</th>
+                  <th class="cell-center">Vai trò</th>
+                  <th class="cell-center">Trạng thái</th>
+                  <th class="cell-center min-w-[210px]">Đường link báo cáo riêng</th>
+                  <th class="cell-center w-28">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="users-table-body" class="divide-y divide-slate-200">
+                <!-- Render JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ========================================================
+           PHÂN HỆ NHÂN VIÊN (EMPLOYEE PORTAL)
+           ======================================================== -->
+      <div id="employee-view" class="space-y-5 animate-fade-in">
+        
+        <!-- Banner thông báo khi vào bằng Link Báo Cáo Riêng -->
+        <div id="emp-direct-link-banner" class="card p-3.5 bg-gradient-to-r from-blue-900 to-indigo-900 text-white shadow-md border border-blue-700 flex flex-wrap items-center justify-between gap-3" style="display: none;">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-blue-500/30 border border-blue-400/40 flex items-center justify-center text-yellow-300 text-lg shrink-0">
+              <i class="fa-solid fa-link"></i>
+            </div>
+            <div>
+              <div class="text-[11px] uppercase tracking-wider text-blue-200 font-bold flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                CỔNG BÁO CÁO CÔNG VIỆC TRỰC TIẾP GỬI QUẢN LÝ
+              </div>
+              <div class="text-xs text-blue-100 mt-0.5">
+                Xin chào <strong id="emp-banner-name">Nhân viên</strong>! Bạn đang truy cập qua link báo cáo riêng. Tiến độ báo cáo sẽ được đồng bộ trực tiếp cho Quản lý.
+              </div>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="copyMyCurrentDirectLink()" class="px-3 py-1.5 rounded-lg bg-blue-700/60 hover:bg-blue-600 text-white text-xs font-semibold border border-blue-400/50 transition flex items-center gap-1.5" title="Sao chép link này để lưu vào Zalo hoặc dấu trang điện thoại">
+              <i class="fa-solid fa-bookmark text-yellow-300"></i>
+              <span>Lưu link vào Zalo</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Thanh hỗ trợ Admin khi xem Cổng Nhân Viên -->
+        <div id="admin-emp-switch-banner" class="card p-3 bg-amber-50 border border-amber-300 text-amber-900 flex flex-wrap items-center justify-between gap-3 text-xs" style="display: none;">
+          <div class="flex items-center gap-2 font-medium">
+            <i class="fa-solid fa-crown text-amber-600 text-sm"></i>
+            <span>Chế độ Quản trị viên đang xem Cổng Nhân Viên của:</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <select id="admin-view-emp-select" onchange="changeAdminViewingEmployee(this.value)" class="bg-white border border-amber-400 rounded-lg px-3 py-1 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-amber-500 shadow-sm">
+              <!-- Render JS -->
+            </select>
+          </div>
+        </div>
+
+        <!-- Profile Card & Quick Actions của Nhân viên -->
+        <div class="card p-5 bg-gradient-to-r from-emerald-800 to-teal-700 text-white shadow-md">
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-3.5">
+              <div class="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white text-2xl font-bold shadow-inner">
+                <i class="fa-solid fa-user-gear"></i>
+              </div>
+              <div>
+                <div class="text-xs text-emerald-200 font-semibold uppercase tracking-wider">Cổng Báo Cáo Nhân Viên</div>
+                <h2 id="emp-portal-name" class="text-xl font-bold">Nguyễn Ngọc Tuân</h2>
+                <p id="emp-portal-role" class="text-xs text-emerald-100">Trưởng nhóm</p>
+              </div>
+            </div>
+
+            <!-- Nút hành động nhanh -->
+            <div class="flex flex-wrap items-center gap-2.5">
+              <button onclick="openMultiPlanModal()" class="px-4 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs shadow-md transition flex items-center gap-2 border border-sky-400">
+                <i class="fa-solid fa-calendar-plus text-sm"></i>
+                <span>1. Lập Kế Hoạch Tuần (Nhiều Ngày)</span>
+              </button>
+
+              <button onclick="openReportModal()" class="px-4 py-2.5 rounded-xl bg-white text-emerald-800 hover:bg-emerald-50 font-bold text-xs shadow-md transition flex items-center gap-2">
+                <i class="fa-solid fa-plus-circle text-emerald-600 text-sm"></i>
+                <span>2. Thêm Việc Phát Sinh / Đầy Đủ</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Thống kê cá nhân (KHÔNG CÓ TỈ LỆ VÀ ĐÁNH GIÁ CỦA QUẢN LÝ) -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 pt-4 border-t border-emerald-600/60">
+            <div>
+              <div class="text-xs text-emerald-200">Tổng đầu việc ghi nhận</div>
+              <div id="emp-stat-total" class="text-2xl font-bold">0</div>
+            </div>
+            <div>
+              <div class="text-xs text-emerald-200">Đã cập nhật thực tế</div>
+              <div id="emp-stat-done" class="text-2xl font-bold text-emerald-300">0</div>
+            </div>
+            <div>
+              <div class="text-xs text-emerald-200">Chờ cập nhật thực tế</div>
+              <div id="emp-stat-pending" class="text-2xl font-bold text-amber-300">0</div>
+            </div>
+            <div>
+              <div class="text-xs text-emerald-200">Tổng SL thực tế đã làm</div>
+              <div id="emp-stat-qty" class="text-2xl font-bold text-white">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Danh sách kế hoạch & thực tế của nhân viên -->
+        <div class="card overflow-hidden">
+          <div class="px-4 py-3 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-calendar-days text-emerald-600"></i>
+              <h3 class="text-sm font-bold text-slate-800">DANH SÁCH KẾ HOẠCH TUẦN & TIẾN ĐỘ THỰC TẾ HÀNG NGÀY</h3>
+              <span id="emp-records-count" class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold">0 việc</span>
+            </div>
+
+            <!-- Lọc tuần cho nhân viên -->
+            <div class="flex items-center gap-2 text-xs">
+              <span class="font-medium text-slate-600">Xem theo tuần:</span>
+              <select id="emp-filter-week" onchange="filterEmployeeWeek(this.value)" class="bg-slate-50 border border-slate-300 rounded px-2.5 py-1 font-bold text-slate-800 outline-none focus:ring-1 focus:ring-emerald-500">
+                <option value="all">Tất cả các tuần</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="bg-amber-50/70 border-b border-amber-200/80 px-4 py-2 text-xs text-amber-800 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-circle-info text-amber-600"></i>
+              <span><strong>Quy trình:</strong> 1️⃣ Đầu tuần bấm <em>"Lập Kế Hoạch Tuần"</em>. 2️⃣ Hàng ngày bấm nút <strong>"Cập nhật thực tế"</strong> màu xanh ở từng dòng để điền kết quả đã làm và ghi chú!</span>
+            </div>
+          </div>
+
+          <div id="employee-table-container" class="excel-table-container max-h-[620px] overflow-x-auto overflow-y-auto">
+            <table class="excel-table">
+              <thead class="sticky top-0 z-20">
+                <tr class="th-group-main">
+                  <th rowspan="2" class="th-fixed w-10 cell-center">STT</th>
+                  <th rowspan="2" class="th-fixed w-12 cell-center">Tuần</th>
+                  <th rowspan="2" class="th-fixed w-24 cell-center whitespace-nowrap">Ngày</th>
+                  <th rowspan="2" class="th-fixed whitespace-nowrap cell-center px-2 min-w-[110px]">CÔNG VIỆC</th>
+                  
+                  <th colspan="3" class="th-group-plan">
+                    <i class="fa-solid fa-calendar-check mr-1"></i> KẾ HOẠCH DỰ KIẾN TUẦN
+                  </th>
+
+                  <th colspan="3" class="th-group-actual">
+                    <i class="fa-solid fa-circle-check mr-1"></i> TIẾN ĐỘ THỰC TẾ HÀNG NGÀY
+                  </th>
+
+                  <th rowspan="2" class="th-fixed min-w-[130px]">Ghi chú / Sự cố</th>
+                  <th rowspan="2" class="th-fixed w-24 cell-center">Trạng thái</th>
+                  <th rowspan="2" class="th-fixed w-28 cell-center">Thao tác</th>
+                </tr>
+                <tr>
+                  <th class="th-sub-plan w-14 cell-center whitespace-nowrap">SL ĐĐ</th>
+                  <th class="th-sub-plan w-14 cell-center whitespace-nowrap">SL</th>
+                  <th class="th-sub-plan min-w-[280px]">Chi tiết</th>
+
+                  <th class="th-sub-actual w-14 cell-center whitespace-nowrap">SL ĐĐ</th>
+                  <th class="th-sub-actual w-14 cell-center whitespace-nowrap">SL</th>
+                  <th class="th-sub-actual min-w-[280px]">Chi tiết</th>
+                </tr>
+              </thead>
+              <tbody id="employee-table-body" class="divide-y divide-slate-200">
+                <!-- Render JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+    </main>
+
+  </div>
+
+  <!-- ========================================================
+       MODAL 0: LẬP KẾ HOẠCH TUẦN ĐA DÒNG (NHIỀU CÔNG VIỆC TRONG NHIỀU NGÀY)
+       ======================================================== -->
+  <div id="multi-plan-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-fade-in border border-slate-200">
+      
+      <!-- Modal Header -->
+      <div class="px-6 py-4 bg-gradient-to-r from-sky-700 to-blue-700 text-white flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-lg font-bold">
+            <i class="fa-solid fa-calendar-days"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold flex items-center gap-2">
+              LẬP KẾ HOẠCH DỰ KIẾN TUẦN (BÁO CÁO 1 LẦN NHIỀU NGÀY)
+            </h3>
+            <p class="text-xs text-sky-100">Lên lịch dự kiến cho cả tuần - Hàng ngày chỉ cần bấm Cập nhật thực tế</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeMultiPlanModal()" class="text-white/80 hover:text-white transition">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- User & Week Info Bar -->
+      <div class="px-6 py-3 bg-sky-50 border-b border-sky-200 flex flex-wrap items-center justify-between gap-4 text-xs">
+        <div class="flex items-center gap-4">
+          <div class="flex items-center gap-1.5">
+            <span class="text-slate-500 font-medium">Nhân viên lập:</span>
+            <span id="multi-plan-emp-name" class="font-bold text-slate-900 bg-white px-2.5 py-1 rounded-lg border border-sky-200 text-xs shadow-sm">-</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span class="text-slate-500 font-medium">Chức vụ:</span>
+            <span id="multi-plan-emp-pos" class="font-bold text-sky-800 bg-white px-2.5 py-1 rounded-lg border border-sky-200 text-xs shadow-sm">-</span>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2.5">
+          <div class="flex items-center gap-1.5">
+            <label class="font-bold text-sky-900">Tuần làm việc: <span class="text-rose-500">*</span></label>
+            <input type="number" id="multi-plan-week" min="1" max="53" placeholder="44" onchange="handleMultiPlanWeekChange()" class="w-16 bg-white border border-sky-300 rounded-lg px-2 py-1 text-xs font-bold text-center text-blue-900 outline-none focus:ring-2 focus:ring-sky-500 shadow-sm">
+          </div>
+          
+          <!-- Phím chọn nhanh tuần -->
+          <div class="inline-flex rounded-lg shadow-sm border border-sky-200 bg-white p-0.5" role="group">
+            <button type="button" id="btn-mp-cur-week" onclick="setMultiPlanWeek('current')" class="px-2.5 py-1 text-xs font-bold rounded text-sky-700 hover:bg-sky-50 transition" title="Lập kế hoạch tuần hiện tại">
+              Tuần này
+            </button>
+            <button type="button" id="btn-mp-next-week" onclick="setMultiPlanWeek('next')" class="px-2.5 py-1 text-xs font-bold rounded bg-emerald-100 text-emerald-800 hover:bg-emerald-200 transition flex items-center gap-1" title="Lên trước kế hoạch cho tuần tới">
+              <i class="fa-solid fa-calendar-arrow-up text-[10px]"></i>
+              <span>Tuần sau</span>
+            </button>
+          </div>
+
+          <!-- Dải ngày của tuần -->
+          <span id="multi-plan-week-range" class="text-xs text-sky-900 font-semibold bg-sky-100 px-2.5 py-1 rounded-lg border border-sky-200 flex items-center gap-1">
+            <i class="fa-regular fa-calendar-days text-sky-600"></i>
+            <span id="multi-plan-week-range-text">--/-- ➔ --/--</span>
+          </span>
+
+          <button type="button" onclick="generateStandardWeekRows()" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs transition border border-sky-700 flex items-center gap-1.5 shadow-sm ml-auto">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            <span>Tự sinh ngày theo tuần</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Table Body Container -->
+      <div class="flex-1 overflow-y-auto p-6 space-y-3">
+
+        <!-- Cảnh báo nếu có ngày sai / trong quá khứ -->
+        <div id="multi-plan-alert-box" class="hidden p-3 rounded-xl bg-rose-50 border border-rose-300 text-xs font-semibold text-rose-700 flex flex-wrap items-center justify-between gap-2 shadow-sm animate-fade-in">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-triangle-exclamation text-base text-rose-600 shrink-0"></i>
+            <span id="multi-plan-alert-msg">Phát hiện ngày làm việc không hợp lệ (ngày trong quá khứ hoặc sai tuần). Hệ thống sẽ không cho lưu!</span>
+          </div>
+          <button type="button" onclick="fixInvalidMultiPlanDates()" class="px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold shadow-sm transition flex items-center gap-1">
+            <i class="fa-solid fa-calendar-check text-[11px]"></i>
+            <span>Chuyển sang Tuần sau</span>
+          </button>
+        </div>
+
+        <div class="overflow-x-auto border border-slate-200 rounded-xl">
+          <table class="excel-table w-full">
+            <thead class="bg-slate-100 text-slate-700">
+              <tr>
+                <th class="w-10 cell-center">STT</th>
+                <th class="min-w-[190px]">Ngày làm việc (Chọn trên lịch) <span class="text-rose-500">*</span></th>
+                <th class="min-w-[170px]">Loại công việc <span class="text-rose-500">*</span></th>
+                <th class="w-24 cell-center">SL Địa điểm</th>
+                <th class="w-24 cell-center">SL (Màn/Tấm)</th>
+                <th class="min-w-[280px]">Chi tiết địa điểm / nội dung dự kiến</th>
+                <th class="w-12 cell-center">Xóa</th>
+              </tr>
+            </thead>
+            <tbody id="multi-plan-table-body" class="divide-y divide-slate-200">
+              <!-- Render JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Nút thêm dòng -->
+        <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+          <button type="button" onclick="addMultiPlanRow()" class="px-3.5 py-1.5 rounded-lg border-2 border-dashed border-sky-400 hover:border-sky-600 bg-sky-50 hover:bg-sky-100 text-sky-800 font-bold text-xs transition flex items-center gap-1.5">
+            <i class="fa-solid fa-plus-circle"></i>
+            <span>+ Thêm đầu việc / ngày khác</span>
+          </button>
+          <span class="text-xs text-slate-400 italic">Mẹo: Có thể tạo nhiều đầu việc trong cùng một ngày nếu phụ trách nhiều tuyến.</span>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+        <span id="multi-plan-count-status" class="text-xs font-semibold text-slate-500">Đang có 0 đầu việc trong kế hoạch</span>
+        <div class="flex items-center gap-2.5">
+          <button type="button" onclick="closeMultiPlanModal()" class="px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-semibold">
+            Hủy bỏ
+          </button>
+          <button type="button" onclick="saveMultiPlanWeek()" class="px-6 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold shadow-md transition flex items-center gap-2">
+            <i class="fa-solid fa-floppy-disk"></i>
+            <span>Lưu Toàn Bộ Kế Hoạch Tuần</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========================================================
+       MODAL 1: CẬP NHẬT TIẾN ĐỘ THỰC TẾ HÀNG NGÀY (CHO NHÂN VIÊN)
+       ======================================================== -->
+  <div id="update-actual-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-fade-in border border-slate-200">
+      
+      <div class="px-6 py-4 bg-emerald-50 border-b border-emerald-200 flex items-center justify-between">
+        <div>
+          <h3 class="text-base font-bold text-emerald-900 flex items-center gap-2">
+            <i class="fa-solid fa-circle-check text-emerald-600"></i>
+            Cập Nhật Tiến Độ Thực Tế Ngày
+          </h3>
+          <p id="update-modal-sub" class="text-xs text-emerald-700 mt-0.5">-</p>
+        </div>
+        <button type="button" onclick="closeUpdateActualModal()" class="text-slate-400 hover:text-slate-600">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto p-6 space-y-4">
+        
+        <!-- Khối hiển thị Kế hoạch đã lập -->
+        <div class="bg-sky-50 border border-sky-200 rounded-xl p-3.5 space-y-1.5 text-xs">
+          <div class="flex items-center justify-between text-sky-900 font-bold border-b border-sky-200 pb-1">
+            <span><i class="fa-solid fa-calendar-check mr-1 text-sky-600"></i> Kế hoạch dự kiến đã lập:</span>
+            <span id="update-plan-summary" class="bg-sky-200 text-sky-900 px-2 py-0.5 rounded font-mono">5 ĐĐ / 50 SL</span>
+          </div>
+          <div id="update-plan-detail-view" class="text-slate-700 whitespace-pre-line font-mono bg-white p-2.5 rounded border border-sky-100 max-h-24 overflow-y-auto">
+            -
+          </div>
+        </div>
+
+        <!-- Khối nhập Tiến độ thực tế -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+              <i class="fa-solid fa-pen-nib text-emerald-600"></i>
+              Tiến độ thực tế hôm nay:
+            </label>
+            <button type="button" onclick="copyPlanToModalActual()" class="text-xs px-2.5 py-1 rounded bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-semibold transition">
+              <i class="fa-solid fa-copy mr-1"></i>Copy y nguyên từ Kế hoạch
+            </button>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Số lượng địa điểm thực tế <span class="text-rose-500">*</span></label>
+              <input type="number" id="update-actual-loc" placeholder="VD: 5" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs focus:bg-white focus:ring-1 focus:ring-emerald-500 outline-none text-center font-bold text-emerald-900">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Số lượng thực tế (Màn / Tấm) <span class="text-rose-500">*</span></label>
+              <input type="text" id="update-actual-qty" placeholder="VD: 50" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs focus:bg-white focus:ring-1 focus:ring-emerald-500 outline-none text-center font-bold text-emerald-900">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Chi tiết công việc đã thực hiện:</label>
+            <textarea id="update-actual-detail" rows="4" placeholder="VD:&#10;+ UNI : 3/3&#10;+ CF : 15/15&#10;+ FF : 10/10&#10;+ SL : 5/5" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-xs focus:bg-white focus:ring-1 focus:ring-emerald-500 outline-none font-mono"></textarea>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Ghi chú (Sự cố, lý do chênh lệch nếu có):</label>
+            <input type="text" id="update-notes" placeholder="VD: ĐH Văn Lang CS3 không được thay chương trình cuối tuần..." class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs focus:bg-white focus:ring-1 focus:ring-emerald-500 outline-none">
+          </div>
+        </div>
+
+      </div>
+
+      <div class="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5">
+        <button type="button" onclick="closeUpdateActualModal()" class="px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-semibold">
+          Hủy bỏ
+        </button>
+        <button type="button" onclick="saveActualProgressOnly()" class="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md transition flex items-center gap-1.5">
+          <i class="fa-solid fa-check"></i>
+          <span>Lưu Tiến Độ Thực Tế</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========================================================
+       MODAL 2: TẠO MỚI / CHỈNH SỬA KẾ HOẠCH & BÁO CÁO TOÀN DIỆN
+       ======================================================== -->
+  <div id="report-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-fade-in border border-slate-200">
+      
+      <!-- Modal Header -->
+      <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+        <h3 id="modal-title" class="text-base font-bold text-slate-800 flex items-center">
+          <i class="fa-solid fa-plus-circle text-emerald-600 mr-2"></i>
+          Tạo Báo Cáo Công Việc
+        </h3>
+        <button type="button" onclick="closeReportModal()" class="text-slate-400 hover:text-slate-600 transition">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body (Form) -->
+      <form id="report-form" class="flex-1 overflow-y-auto p-6 space-y-4">
+        
+        <!-- Hàng 1: Tuần, Ngày, Nhân viên, Chức vụ -->
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Tuần <span class="text-rose-500">*</span></label>
+            <input type="text" id="form-week" required placeholder="VD: 44" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs focus:bg-white focus:ring-1 focus:ring-blue-500 outline-none font-bold">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Ngày làm việc (Chọn trên lịch) <span class="text-rose-500">*</span></label>
+            <input type="date" id="form-date" required onchange="handleFormDateChange(this.value)" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 focus:bg-white focus:ring-1 focus:ring-blue-500 outline-none cursor-pointer">
+            <div id="form-date-status" class="mt-1 text-[11px] font-semibold text-slate-500"></div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Họ tên nhân viên <span class="text-rose-500">*</span></label>
+            <input type="text" id="form-employee-name" required placeholder="Nhập tên nhân viên..." class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs focus:bg-white focus:ring-1 focus:ring-blue-500 outline-none font-semibold">
+            <span id="form-emp-note" class="text-[10px] text-emerald-600 font-medium mt-0.5 block">Tự động gắn theo tài khoản đang báo cáo</span>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Chức vụ</label>
+            <input type="text" id="form-position" placeholder="VD: Nhân viên, Chuyên viên..." class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs focus:bg-white focus:ring-1 focus:ring-blue-500 outline-none">
+          </div>
+        </div>
+
+        <!-- Hàng 2: Loại công việc -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Loại công việc (Chi tiết công việc) <span class="text-rose-500">*</span></label>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <select id="form-job-type" class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs focus:bg-white focus:ring-1 focus:ring-blue-500 outline-none font-medium">
+              <!-- Render JS -->
+            </select>
+            <input type="text" id="form-job-type-custom" placeholder="Hoặc tự gõ tên công việc đặc thù..." oninput="if(this.value) document.getElementById('form-job-type').value=this.value" class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs focus:bg-white focus:ring-1 focus:ring-blue-500 outline-none">
+          </div>
+        </div>
+
+        <!-- Khối 2 cột: Kế hoạch dự kiến vs Tiến độ thực tế -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+          
+          <!-- Box KẾ HOẠCH DỰ KIẾN -->
+          <div class="p-4 rounded-xl bg-sky-50/70 border border-sky-200 space-y-3">
+            <div class="flex items-center justify-between text-sky-900 border-b border-sky-200 pb-1.5">
+              <span class="text-xs font-bold uppercase flex items-center gap-1.5">
+                <i class="fa-solid fa-calendar-check text-sky-600"></i> Kế hoạch dự kiến tuần
+              </span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[11px] font-semibold text-sky-900 mb-0.5">Số lượng địa điểm</label>
+                <input type="number" id="form-plan-loc" placeholder="VD: 5" class="w-full bg-white border border-sky-300 rounded-lg px-2.5 py-1 text-xs focus:ring-1 focus:ring-sky-500 outline-none text-center font-bold">
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-sky-900 mb-0.5">Số lượng (màn/tấm)</label>
+                <input type="text" id="form-plan-qty" placeholder="VD: 50" class="w-full bg-white border border-sky-300 rounded-lg px-2.5 py-1 text-xs focus:ring-1 focus:ring-sky-500 outline-none text-center font-bold">
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-semibold text-sky-900 mb-0.5">Chi tiết công việc dự kiến</label>
+              <textarea id="form-plan-detail" rows="4" placeholder="VD:&#10;+ UNI: 3/3&#10;+ CF: 15/15&#10;+ FF: 10/10&#10;+ SL: 5/5" class="w-full bg-white border border-sky-300 rounded-lg p-2 text-xs focus:ring-1 focus:ring-sky-500 outline-none font-mono"></textarea>
+            </div>
+          </div>
+
+          <!-- Box TIẾN ĐỘ THỰC TẾ -->
+          <div id="form-actual-box" class="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200 space-y-3">
+            <div class="flex items-center justify-between text-emerald-900 border-b border-emerald-200 pb-1.5">
+              <span class="text-xs font-bold uppercase flex items-center gap-1.5">
+                <i class="fa-solid fa-circle-check text-emerald-600"></i> Tiến độ thực tế ngày
+              </span>
+              <button type="button" onclick="copyPlanToActual()" class="text-[11px] px-2 py-0.5 rounded bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-semibold transition" title="Sao chép nội dung từ Kế hoạch sang nếu hoàn thành đúng">
+                <i class="fa-solid fa-copy mr-1"></i>Copy từ Kế hoạch
+              </button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[11px] font-semibold text-emerald-900 mb-0.5">Số lượng địa điểm</label>
+                <input type="number" id="form-actual-loc" placeholder="VD: 5" class="w-full bg-white border border-emerald-300 rounded-lg px-2.5 py-1 text-xs focus:ring-1 focus:ring-emerald-500 outline-none text-center font-bold">
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-emerald-900 mb-0.5">Số lượng thực tế</label>
+                <input type="text" id="form-actual-qty" placeholder="VD: 50" class="w-full bg-white border border-emerald-300 rounded-lg px-2.5 py-1 text-xs focus:ring-1 focus:ring-emerald-500 outline-none text-center font-bold">
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-semibold text-emerald-900 mb-0.5">Chi tiết công việc thực tế</label>
+              <textarea id="form-actual-detail" rows="4" placeholder="VD:&#10;+ UNI: 3/3&#10;+ CF: 15/15&#10;+ FF: 10/10&#10;+ SL: 5/5" class="w-full bg-white border border-emerald-300 rounded-lg p-2 text-xs focus:ring-1 focus:ring-emerald-500 outline-none font-mono"></textarea>
+            </div>
+          </div>
+
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Ghi chú (Sự cố, lý do phát sinh nếu có):</label>
+          <input type="text" id="form-notes" placeholder="VD: ĐH Văn Lang CS3 không được thay chương trình cuối tuần..." class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs focus:bg-white focus:ring-1 focus:ring-blue-500 outline-none">
+        </div>
+
+        <input type="hidden" id="form-completion-rate">
+
+        <div id="form-eval-group" style="display: none;">
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Đánh giá của Quản lý (Nhận xét)</label>
+          <input type="text" id="form-evaluation" placeholder="Nhận xét, ghi nhận của Leader/Quản lý..." class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs focus:bg-white focus:ring-1 focus:ring-blue-500 outline-none">
+        </div>
+
+      </form>
+
+      <div class="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5">
+        <button type="button" onclick="closeReportModal()" class="px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition">
+          Hủy bỏ
+        </button>
+        <button type="submit" form="report-form" class="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md transition flex items-center gap-1.5">
+          <i class="fa-solid fa-floppy-disk"></i>
+          <span>Lưu Báo Cáo</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========================================================
+       MODAL 3: TẠO TÀI KHOẢN NHÂN VIÊN MỚI (CHỈ ADMIN)
+       ======================================================== -->
+  <div id="create-user-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-fade-in border border-slate-200 space-y-4">
+      
+      <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+        <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-user-plus text-indigo-600 text-base"></i>
+          Tạo Tài Khoản Nhân Viên Mới
+        </h3>
+        <button type="button" onclick="closeCreateUserModal()" class="text-slate-400 hover:text-slate-600">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <form id="create-user-form" class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Tên đăng nhập (Username) <span class="text-rose-500">*</span></label>
+          <input type="text" id="new-username" required placeholder="VD: nguyenvanan (viết liền không dấu)" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono focus:bg-white focus:ring-1 focus:ring-indigo-500 outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Mật khẩu khởi tạo <span class="text-rose-500">*</span></label>
+          <input type="text" id="new-password" required value="123456" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono focus:bg-white focus:ring-1 focus:ring-indigo-500 outline-none font-bold">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Họ và tên nhân viên <span class="text-rose-500">*</span></label>
+          <input type="text" id="new-fullname" required placeholder="VD: Nguyễn Văn An" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold focus:bg-white focus:ring-1 focus:ring-indigo-500 outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Chức vụ</label>
+          <input type="text" id="new-position" placeholder="VD: Nhân viên, Chuyên viên..." value="Nhân viên" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs focus:bg-white focus:ring-1 focus:ring-indigo-500 outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Vai trò trong hệ thống</label>
+          <select id="new-role" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-indigo-500">
+            <option value="employee" selected>Nhân viên báo cáo</option>
+            <option value="admin">Quản trị viên (Admin)</option>
+          </select>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+          <button type="button" onclick="closeCreateUserModal()" class="px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-100 text-slate-600 text-xs font-semibold">
+            Hủy
+          </button>
+          <button type="submit" class="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow transition flex items-center gap-1.5">
+            <i class="fa-solid fa-plus"></i>
+            <span>Tạo Tài Khoản</span>
+          </button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+
+  <!-- ========================================================
+       MODAL 4: ĐÁNH GIÁ NHANH CỦA QUẢN LÝ
+       ======================================================== -->
+  <div id="eval-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-fade-in border border-slate-200 space-y-4">
+      
+      <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+        <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-award text-amber-500 text-base"></i>
+          Đánh Giá & Nhận Xét Báo Cáo
+        </h3>
+        <button type="button" onclick="closeEvaluationModal()" class="text-slate-400 hover:text-slate-600">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-1 text-xs bg-slate-50 p-3 rounded-lg border border-slate-200">
+        <div>Nhân sự: <strong id="eval-emp-name" class="text-slate-900">-</strong></div>
+        <div id="eval-report-info" class="text-slate-500">-</div>
+        <div id="eval-report-progress" class="font-semibold text-blue-700">-</div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1.5">Mẫu đánh giá nhanh:</label>
+        <div class="flex flex-wrap gap-1.5">
+          <button type="button" onclick="setQuickEval('⭐ Hoàn thành xuất sắc')" class="px-2.5 py-1 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold border border-emerald-200">
+            ⭐ Xuất sắc
+          </button>
+          <button type="button" onclick="setQuickEval('✅ Đạt yêu cầu')" class="px-2.5 py-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-800 text-xs font-semibold border border-blue-200">
+            ✅ Đạt yêu cầu
+          </button>
+          <button type="button" onclick="setQuickEval('⚠️ Chậm tiến độ / Cần khắc phục')" class="px-2.5 py-1 rounded bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-semibold border border-amber-200">
+            ⚠️ Chậm tiến độ
+          </button>
+          <button type="button" onclick="setQuickEval('❌ Không đạt / Cần giải trình')" class="px-2.5 py-1 rounded bg-rose-50 hover:bg-rose-100 text-rose-800 text-xs font-semibold border border-rose-200">
+            ❌ Không đạt
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Ghi chú nhận xét của Quản lý:</label>
+        <textarea id="eval-comment-input" rows="3" placeholder="Nhập lời khen, nhắc nhở hoặc yêu cầu hỗ trợ..." class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-xs focus:bg-white focus:ring-1 focus:ring-blue-500 outline-none"></textarea>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+        <button type="button" onclick="closeEvaluationModal()" class="px-3.5 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-100 text-slate-600 text-xs font-medium">
+          Hủy
+        </button>
+        <button type="button" onclick="saveEvaluation()" class="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow transition">
+          Lưu Đánh Giá
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========================================================
+       MODAL 5: CẤU HÌNH ĐỊA CHỈ WEB / LAN CHO LINK BÁO CÁO
+       ======================================================== -->
+  <div id="config-url-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 animate-fade-in border border-slate-200 space-y-4">
+      
+      <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+        <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-network-wired text-indigo-600"></i>
+          Cấu Hình Địa Chỉ Web / LAN Cho Link Báo Cáo
+        </h3>
+        <button type="button" onclick="closeConfigUrlModal()" class="text-slate-400 hover:text-slate-600">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3.5 text-xs text-slate-600 leading-relaxed">
+        <div class="p-3 bg-amber-50 border border-amber-300 rounded-xl space-y-1 text-amber-900">
+          <div class="font-bold flex items-center gap-1.5 text-amber-800">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            Vì sao Zalo báo lỗi "Website can't be reached (invalidurl)"?
+          </div>
+          <p class="text-[11px] leading-relaxed">
+            Zalo <strong>không cho phép mở link dạng <code class="bg-amber-100 px-1 rounded">file:///</code></strong> vì bảo mật. Link gửi qua Zalo <strong>bắt buộc phải là <code class="bg-amber-100 px-1 rounded font-bold">http://</code> hoặc <code class="bg-amber-100 px-1 rounded font-bold">https://</code></strong>.
+          </p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1.5">Chọn chế độ địa chỉ link gửi Zalo:</label>
+          <div class="grid grid-cols-2 gap-2 mb-2">
+            <button type="button" onclick="setPresetConfigUrl('lan')" class="px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-[11px] flex items-center justify-center gap-1.5 transition shadow-sm text-left">
+              <i class="fa-solid fa-wifi text-emerald-600"></i>
+              <span>Máy chủ Wi-Fi (192.168.0.173:8888)</span>
+            </button>
+            <button type="button" onclick="setPresetConfigUrl('file')" class="px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-300 font-semibold text-[11px] flex items-center justify-center gap-1.5 transition text-left">
+              <i class="fa-solid fa-laptop text-slate-500"></i>
+              <span>File nội bộ máy này</span>
+            </button>
+          </div>
+
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Địa chỉ gốc (Base URL) hoặc Link Hosting:</label>
+          <input type="text" id="config-base-url-input" oninput="updateConfigPreview()" placeholder="VD: http://192.168.0.173:8888/index.html hoặc https://baocaocongviec.vercel.app" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-xs font-mono focus:bg-white focus:ring-1 focus:ring-indigo-500 outline-none">
+          <p class="text-[11px] text-slate-400 mt-1">💡 Để nhân viên mở được khi kết nối Wi-Fi công ty, hãy nhấp đúp file <code class="font-bold text-slate-700 bg-slate-100 px-1 rounded">CHAY_MAY_CHU_LAN.bat</code> trong thư mục phần mềm.</p>
+        </div>
+
+        <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-xl space-y-1">
+          <div class="font-bold text-indigo-900 flex items-center justify-between">
+            <span>Ví dụ link mẫu sẽ sao chép gửi cho nhân viên:</span>
+            <span class="text-[10px] text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full font-bold">Hết lỗi invalidurl</span>
+          </div>
+          <div id="config-preview-link" class="font-mono text-indigo-700 break-all select-all font-semibold">-</div>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between pt-3 border-t border-slate-200">
+        <button type="button" onclick="resetConfigUrl()" class="px-3 py-1.5 rounded-lg text-rose-600 hover:bg-rose-50 text-xs font-semibold">
+          Đặt lại mặc định
+        </button>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="closeConfigUrlModal()" class="px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-100 text-slate-600 text-xs font-semibold">
+            Đóng
+          </button>
+          <button type="button" onclick="saveConfigUrl()" class="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow transition">
+            Lưu Cấu Hình
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-[100] flex flex-col gap-2 pointer-events-none max-w-md"></div>
+
+  <!-- ================= FOOTER ================= -->
+  <footer class="bg-white border-t border-slate-200 py-3 text-center text-xs text-slate-400 no-print mt-auto">
+    <div class="max-w-[1920px] mx-auto px-4 flex flex-wrap items-center justify-between gap-2">
+      <div>Hệ thống Quản lý Báo cáo Công việc Kỹ thuật © 2026 • Phân quyền & Giám sát tiến độ hàng ngày</div>
+      <div class="flex items-center gap-3">
+        <span>Phiên bản 3.0</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Scripts: Vendor libraries with CDN fallback & App logic -->
+  <script src="vendor/exceljs.min.js"></script>
+  <script src="vendor/xlsx.full.min.js"></script>
+  <script src="vendor/chart.umd.min.js"></script>
+  <script src="data_seed.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
